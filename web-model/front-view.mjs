@@ -5,42 +5,32 @@ import { makeScreen } from './screen.mjs';
 import { createMotionControl } from './motion.mjs';
 import { createStudioFloor } from './studio-floor.mjs';
 import { createWheelInput } from './wheel-input.mjs';
+import {visualBaseline,screenQuality} from './visual-profile.mjs';
+import {createStudioEnvironment} from './environment.mjs';
+import {createAtmosphere} from './atmosphere.mjs';
 
 const app=window.PocketClassicContext,host=document.getElementById('modelViewport'),status=document.getElementById('modelStatus');
-const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance',preserveDrawingBuffer:true});
+document.body.classList.toggle('visual-baseline',visualBaseline);
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance',preserveDrawingBuffer:visualBaseline});
+let shaderErrors=0;
+renderer.debug.onShaderError=(gl,program,vertex,fragment)=>{shaderErrors++;console.error('WebGL shader compilation failed',gl.getProgramInfoLog(program),gl.getShaderInfoLog(vertex),gl.getShaderInfoLog(fragment));};
 renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.02;renderer.setClearColor(0,0);
 renderer.domElement.setAttribute('aria-label','iPod Classic 正面三维模型，轻移鼠标或开启体感改变反光');host.append(renderer.domElement);
 const scene=new THREE.Scene();
 const camera=new THREE.OrthographicCamera(-4,4,6,-6,.1,60);camera.position.set(0,0,20);camera.lookAt(0,0,0);
 
-// Broad, neutral studio cards. Anodized aluminum should have soft reflected
-// light rather than the dark architectural reflections of an indoor room.
-function studioEnvironment(){
-  const w=512,h=256,data=new Float32Array(w*h*4);
-  const directions=[new THREE.Vector3(0,.2,1).normalize(),new THREE.Vector3(-.62,.45,.9).normalize(),new THREE.Vector3(.9,.1,.35).normalize(),new THREE.Vector3(0,1,0)];
-  const gaussian=(v,d,spread)=>Math.exp((v.dot(d)-1)/(spread*spread));
-  const strip=(v,cx,width,cy,height)=>Math.exp(-.5*((v.x-cx)/width)**2-.5*((v.y-cy)/height)**2)*Math.max(0,v.z);
-  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
-    const phi=y/(h-1)*Math.PI,theta=(x/(w-1)-.5)*Math.PI*2;
-    const v=new THREE.Vector3(-Math.sin(phi)*Math.cos(theta),Math.cos(phi),Math.sin(phi)*Math.sin(theta));
-    // Shaped strip lights and a dark flag give metal a readable bright/dark edge.
-    // Their reflected bands move with the existing restrained phone tilt.
-    let light=.33+.62*gaussian(v,directions[0],.82)+2.1*gaussian(v,directions[1],.25)+1.4*gaussian(v,directions[2],.12)+.38*gaussian(v,directions[3],.7);
-    light+=2.7*strip(v,-.27,.095,.08,.78)+1.5*strip(v,.48,.06,-.12,.67);
-    light*=1-.42*strip(v,.13,.11,.04,.9);
-    const i=(y*w+x)*4;data[i]=light;data[i+1]=light;data[i+2]=light;data[i+3]=1;
-  }
-  const texture=new THREE.DataTexture(data,w,h,THREE.RGBAFormat,THREE.FloatType);texture.mapping=THREE.EquirectangularReflectionMapping;texture.needsUpdate=true;
-  const pmrem=new THREE.PMREMGenerator(renderer),target=pmrem.fromEquirectangular(texture);texture.dispose();pmrem.dispose();return target.texture;
-}
-scene.environment=studioEnvironment();scene.environmentIntensity=1;
+const environment=createStudioEnvironment(renderer,{baseline:visualBaseline});
+scene.environment=environment.texture;scene.environmentIntensity=1;
 scene.add(new THREE.HemisphereLight(0xffffff,0xaaaaaa,.4));
 const key=new THREE.DirectionalLight(0xffffff,.8);key.position.set(-4,7,12);scene.add(key);
 const fill=new THREE.DirectionalLight(0xffffff,.35);fill.position.set(7,-1,5);scene.add(fill);
 RectAreaLightUniformsLib.init();
-const studioCard=new THREE.RectAreaLight(0xffffff,12,1.8,12);studioCard.position.set(-2.8,1.5,6);studioCard.lookAt(0,0,0);scene.add(studioCard);
-const screen=makeScreen(app),classic=createClassic(screen.texture);scene.add(classic.model);
-const floor=createStudioFloor(classic.model,-D.height/2-.025);scene.add(floor.group);
+const studioCard=new THREE.RectAreaLight(0xffffff,visualBaseline?12:5.5,visualBaseline?1.8:4.5,visualBaseline?12:8);studioCard.position.set(...(visualBaseline?[-2.8,1.5,6]:[-3.8,4.2,8]));studioCard.lookAt(0,0,0);scene.add(studioCard);
+const rimLight=new THREE.RectAreaLight(0xffead1,visualBaseline?0:1.6,3,7);rimLight.position.set(5,2,6);rimLight.lookAt(0,0,0);if(!visualBaseline)scene.add(rimLight);
+const quality=screenQuality(renderer.capabilities);
+const screen=makeScreen(app,{...quality,baseline:visualBaseline}),classic=createClassic(screen.texture,{baseline:visualBaseline});scene.add(classic.model);
+const floor=createStudioFloor(classic.model,-D.height/2-.025,{baseline:visualBaseline});scene.add(floor.group);
+const atmosphere=createAtmosphere({scene,camera,native:!!app.native,baseline:visualBaseline});
 classic.model.rotation.set(-.008,-.025,0);
 let targetX=-.008,targetY=-.025,previous=performance.now(),gesture=null,holdTimer,seekTimer,renderedFrames=0;
 const compactQuery=matchMedia('(max-width:1000px)');
@@ -74,10 +64,10 @@ new ResizeObserver(measure).observe(host);measure();
 function pick(e){const r=host.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);raycaster.setFromCamera(pointer,camera);
   for(const hit of raycaster.intersectObject(classic.model,true)){const p=classic.model.worldToLocal(hit.point.clone()),zone=hit.object.userData.zone;if(zone==='wheel'&&Math.hypot(p.x,p.y-D.wheelY)>1.945)continue;return {point:p,zone:zone||'case'}}return null}
 function wheelAction(p){const x=p.x,y=p.y-D.wheelY;if(Math.hypot(x,y)<.70)return 'select';return Math.abs(y)>Math.abs(x)?(y>0?'menu':'play'):(x<0?'previous':'next')}
-function release(){clearTimeout(holdTimer);clearInterval(seekTimer);classic.center.position.z=.493}
+function release(){clearTimeout(holdTimer);clearInterval(seekTimer);classic.center.position.z=.493;classic.setPressed(false)}
 host.addEventListener('pointerdown',e=>{if(e.button!==0)return;const hit=pick(e);if(!hit||hit.zone==='case')return;const p=hit.point;
   gesture={id:e.pointerId,zone:hit.zone,point:p.clone(),angle:Math.atan2(p.y-D.wheelY,p.x),sum:0,dial:createWheelInput(),moved:false,held:false,x:e.clientX,y:e.clientY,action:hit.zone==='wheel'?wheelAction(p):null};
-  host.setPointerCapture(e.pointerId);if(gesture.action==='select'&&!app.state.hold)classic.center.position.z=.470;
+  host.setPointerCapture(e.pointerId);if(gesture.action==='select'&&!app.state.hold){classic.center.position.z=.470;classic.setPressed(true);}
   if(hit.zone==='wheel')holdTimer=setTimeout(()=>{if(gesture&&!gesture.moved){gesture.held=true;app.action(gesture.action,true);if(['previous','next'].includes(gesture.action))seekTimer=setInterval(()=>app.action(gesture?.action,true),180)}},480);
 });
 host.addEventListener('pointermove',e=>{
@@ -100,14 +90,19 @@ for(const [action,label,x,y,z,w,h]of buttons){const button=document.createElemen
   overlay.append(button);hitButtons.push({button,point:new THREE.Vector3(x,y,z)})}
 const swatch=document.getElementById('frontColor');swatch.onclick=()=>{app.state.dark=!app.state.dark;app.render();swatch.setAttribute('aria-label',app.state.dark?'切换银色机身':'切换黑色机身')};
 let meshes=0,triangles=0;classic.model.traverse(o=>{if(o.isMesh){meshes++;triangles+=(o.geometry.index?.count||o.geometry.attributes.position.count)/3}});
-Object.assign(host.dataset,{webgl:'true',meshes:String(meshes),triangles:String(Math.round(triangles)),view:'front-only',dimensions:'61.8 × 103.5 × 10.5 mm',reflection:'mirrored-geometry-with-fade',shadow:'soft-contact'});
+Object.assign(host.dataset,{webgl:'true',meshes:String(meshes),triangles:String(Math.round(triangles)),view:'front-only',dimensions:'61.8 × 103.5 × 10.5 mm',reflection:'mirrored-geometry-with-fade',shadow:'soft-contact',visualProfile:visualBaseline?'baseline':'frosted',lcdScale:String(screen.pixelScale),lcdPixels:`${screen.canvas.width}x${screen.canvas.height}`,lcdAnisotropy:String(screen.texture.anisotropy),environment:environment.resolution,particles:String(atmosphere.count)});
+window.PocketClassicVisual={diagnostics(){const gl=renderer.getContext();return {profile:host.dataset.visualProfile,drawCalls:renderer.info.render.calls,frameTriangles:renderer.info.render.triangles,textures:renderer.info.memory.textures,geometries:renderer.info.memory.geometries,shaderErrors,glError:gl.getError(),contextLost:gl.isContextLost(),lcdPixels:host.dataset.lcdPixels,particles:atmosphere.count};}};
 function frame(now){const dt=Math.min(.05,(now-previous)/1000);previous=now;const ease=1-Math.exp(-dt*7);
   const sensor=motion.tick(dt,now,!!gesture),usingSensor=motion.state.enabled;
   const x=usingSensor?-.008+sensor.x:targetX,y=usingSensor?-.025+sensor.y:targetY;
   // Freeze both input and the rendered pose while using the wheel or buttons.
   if(!gesture){classic.model.rotation.x+=(x-classic.model.rotation.x)*ease;classic.model.rotation.y+=(y-classic.model.rotation.y)*ease}
-  classic.model.updateMatrixWorld(true);classic.setDark(app.state.dark);classic.setHold(app.state.hold);screen.draw();floor.update(app.state.dark);
+  classic.model.updateMatrixWorld(true);classic.setDark(app.state.dark);classic.setHold(app.state.hold);screen.draw();
+  if(!visualBaseline){studioCard.position.x=-3.8+(classic.model.rotation.y+.025)*7;studioCard.position.y=4.2+(classic.model.rotation.x+.008)*5;studioCard.lookAt(0,0,0);}
+  atmosphere.update(dt,{dark:app.state.dark,trackId:app.state.current?.id||0,playing:!app.audio.paused,tiltX:classic.model.rotation.x+.008,tiltY:classic.model.rotation.y+.025,reducedMotion:reducedMotion.matches});
+  floor.update(app.state.dark,atmosphere.accent,reducedMotion.matches?1:1+Math.sin(now*.00045)*.035);
   const r=host.getBoundingClientRect();for(const {button,point}of hitButtons){const p=classic.model.localToWorld(point.clone()).project(camera);button.style.transform=`translate(${(p.x*.5+.5)*r.width}px,${(-p.y*.5+.5)*r.height}px) translate(-50%,-50%)`}
-  host.dataset.tilt=`${classic.model.rotation.x.toFixed(4)},${classic.model.rotation.y.toFixed(4)}`;renderer.render(scene,camera);host.dataset.frames=String(++renderedFrames);requestAnimationFrame(frame);
+  host.dataset.tilt=`${classic.model.rotation.x.toFixed(4)},${classic.model.rotation.y.toFixed(4)}`;renderer.render(scene,camera);host.dataset.frames=String(++renderedFrames);if(renderedFrames%30===0){host.dataset.drawCalls=String(renderer.info.render.calls);host.dataset.frameTriangles=String(renderer.info.render.triangles);host.dataset.textures=String(renderer.info.memory.textures);}requestAnimationFrame(frame);
 }
 document.body.classList.add('three-ready');requestAnimationFrame(frame);
+window.addEventListener('pagehide',e=>{if(!e.persisted){atmosphere.dispose();floor.dispose();screen.dispose();environment.dispose();renderer.dispose();}});

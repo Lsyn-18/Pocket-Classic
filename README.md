@@ -8,18 +8,18 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
   <img src="docs/images/pocket-classic.svg" width="900" alt="Pocket Classic 界面示意：经典转轮、每日推荐、私人漫游与渐隐倒影">
 </p>
 
-> 当前为 **Android 0.3.4 独立测试版**。登录、歌单、日推、漫游及播放地址解析均由手机直连网易云；无需电脑、局域网服务或配对码。界面资源随安装包提供，音乐通过 Media3 原生后台服务播放，登录状态使用 Android Keystore 加密保存在手机。已在小米 Android 15 / HyperOS 2.0 真机完成账号、播放、封面、后台续歌及传感器检查；其他机型和长期运行仍待验证。
+> 当前为 **Android 0.4.0 独立测试版**，升级磨砂金属、柔光反射、高清 LCD 与摄影棚氛围。登录、歌单、日推、漫游及播放地址解析均由手机直连网易云；无需电脑、局域网服务或配对码。界面资源随安装包提供，音乐通过 Media3 原生后台服务播放，登录状态使用 Android Keystore 加密保存在手机。音乐与设备功能已在 0.3.4 小米真机验证；0.4.0 的真机性能验收待手机重连。
 
 ## 安卓独立使用
 
-<p align="center"><img src="docs/images/front-preview.png" width="240" alt="手机尺寸浏览器中的实际未登录界面"></p>
+<p align="center"><img src="docs/images/frosted-silver.png" width="240" alt="冷银摄影棚：磨砂金属、高清 LCD 与柔和倒影"><img src="docs/images/frosted-black.png" width="240" alt="深色磨砂机身与低饱和摄影棚背景"></p>
 
-1. 下载并安装 [Android 0.3.4 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.3.4)。
+1. 下载并安装 [Android 0.4.0 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.4.0)。
 2. 点击底部「连接音乐」，再点击「保存并打开网易云」。
 3. 在网易云「扫一扫 → 相册」选择刚保存的二维码，确认授权后返回播放器。
 4. 进入「音乐」选择个人歌单、每日推荐或私人漫游。
 
-二维码过期后重新生成即可，也可使用另一部已登录网易云的设备扫码。手机需要正常互联网连接；应用不申请相册读取权限，Android 8/9 保存二维码时需要写入权限。升级旧测试包后需要重新授权，界面外观偏好会保留。
+二维码过期后重新生成即可，也可使用另一部已登录网易云的设备扫码。手机需要正常互联网连接；应用不申请相册读取权限，Android 8/9 保存二维码时需要写入权限。从 0.3.0 及后续版本使用相同签名覆盖安装时保留手机上的加密会话，授权失效时再重新扫码；更早的电脑网关版本需要重新授权。
 
 当前按钮尝试打开网易云扫一扫。正式“一键唤起应用授权确认并回调”需要网易云开放平台应用身份、签名及回调域名配置，并由网易云登记 App 的回跳协议，本项目尚未接入；官方令牌还需配套使用官方音乐接口。只有收到授权成功并确认账号后才记录登录。不同网易云版本的跳转表现需真机验证，无法唤起时可手动打开扫一扫。官方流程见 [H5 登录与唤端登录](https://developer.music.163.com/st/developer/document?docId=0adf20d426564597b9219d4c12bf00f7)。
 
@@ -32,14 +32,15 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
 - **真实封面与电量**：采用细边框、柔和绿色电芯和小型充电闪电的经典 LCD 电池图标。播放时自动显示专辑封面，切歌随之更新；iPod 电量图标实时反映手机电量和充电状态。
 - **网易云音乐**：手机直接扫码授权账号，浏览个人歌单、选择歌曲，支持每日推荐和私人漫游。
 - **连续漫游**：通过私人 FM 获取推荐，队列接近结尾时自动补歌，过滤最近重复推荐，支持切歌和失败重试。
-- **正面三维机身**：按 Classic 的比例建模，使用更清晰的银色金属亮边、定向光泽和随轻微倾斜移动的条形高光、接触阴影与向下渐隐的镜面倒影。
+- **磨砂三维机身**：按 Classic 的比例建模，采用磨砂金属、宽柔光反射、细倒角、浅凹转轮与分层屏框；光池和向下渐隐的倒影构成冷银摄影棚。
+- **高清 LCD**：保持经典菜单比例，默认四倍物理分辨率，并根据设备能力降档；屏内阴影、细微栅格与更清晰的文字保持克制。
 - **克制的体感**：手动开启后以当前拿握姿势校准，忽略 3° 内的小抖动，额外倾斜最多 2.2°；操作转轮时保持视角稳定。
 - **手机自适应**：手机上隐藏介绍、页眉和页脚，机身尽可能放大；横屏时工具移到右侧，适配安全区域和浏览器可视高度变化。
 - **原生安卓播放**：使用 Media3 后台播放和通知栏控制，漫游补歌在后台服务中完成；网易云登录会话通过 Android Keystore 加密保存，网页界面不接触登录凭证。
 
 ## 两个版本的进度
 
-| 功能 | 浏览器开发版 | Android 0.3.4 独立版 |
+| 功能 | 浏览器开发版 | Android 0.4.0 独立版 |
 | --- | --- | --- |
 | iPod 风格菜单、转轮和按键 | 已实现 | 已实现 |
 | 个人歌单、选歌和播放 | 已验证 | 真机账号、歌单曲目及原生播放已验证 |
@@ -50,6 +51,8 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
 | 原生后台播放、通知栏、音频焦点 | 使用浏览器播放能力 | 后台播放通过，通知栏交互与音频焦点另待专项验证 |
 | 歌曲专辑封面与专辑名 | 自动读取，失败时显示占位图 | 真机 CDN 下载、原生缩略图及 WebView 解码通过 |
 | 电量和触感 | 取决于浏览器设备接口支持 | 系统实时电量、充电状态及原生马达调用 |
+
+表中的音乐及设备真机记录来自 0.3.4；0.4.0 共用这些功能实现，已完成浏览器和模拟器外观检查，真机性能复验待重连。视觉参数与对比开关见 [渲染升级](docs/RENDER-UPGRADE.md)。
 
 ## 浏览器开发预览（可选）
 
@@ -93,9 +96,9 @@ npm start
 .\Build-Android.ps1
 ```
 
-脚本构建 Debug APK，并运行安卓单元测试与 Lint。安装包生成到 `outputs/Pocket-Classic-0.3.4-debug.apk`，构建产物不会提交到 Git。若已安装网页开发依赖，脚本会先更新安卓界面资源；否则使用仓库中已打包的资源。安装运行不需要 Node.js。
+脚本构建 Debug APK，并运行安卓单元测试与 Lint。安装包生成到 `outputs/Pocket-Classic-0.4.0-debug.apk`，构建产物不会提交到 Git。若已安装网页开发依赖，脚本会先更新安卓界面资源；否则使用仓库中已打包的资源。安装运行不需要 Node.js。
 
-使用方式见上方「安卓独立使用」。0.3.0 起已移除地址和配对码输入；无需 `adb reverse` 或手机网关。安装包见 [Android 0.3.4 独立测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.3.4)，安装时可能需要允许当前来源安装应用。
+使用方式见上方「安卓独立使用」。0.3.0 起已移除地址和配对码输入；无需 `adb reverse` 或手机网关。安装包见 [Android 0.4.0 独立测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.4.0)，安装时可能需要允许当前来源安装应用。
 
 ## 开发与验证
 
@@ -103,7 +106,7 @@ npm start
 
 ```sh
 # 在项目根目录运行：服务访问控制、推荐、队列、体感和播放器流程检查
-node --test music-service/discovery.test.cjs music-service/gateway.test.cjs web-model/motion.test.mjs web-model/roam-stream.test.mjs web-model/player.test.mjs web-model/native-platform.test.mjs web-model/wheel-input.test.mjs web-model/artwork.test.mjs
+node --test music-service/discovery.test.cjs music-service/gateway.test.cjs web-model/motion.test.mjs web-model/roam-stream.test.mjs web-model/player.test.mjs web-model/native-platform.test.mjs web-model/wheel-input.test.mjs web-model/artwork.test.mjs web-model/visual.test.mjs
 
 # 修改三维外观或浏览器逻辑后重新打包
 cd web-model
@@ -115,7 +118,7 @@ npm run build -- --publish --android
 
 **0.3.4 已在小米 Android 15 / HyperOS 2.0 真机完成 6 项检查**：基础画面与转轮、真实电量、缩略图及队列、现有账号歌单、完整日推/漫游播放与真实封面下载、后台跨曲补歌、返回前台及原生传感器校准。未登录主页约 2.5 秒采样为 60.6 fps，仅作为短时观察。系统触感关闭时震动请求会被忽略；用户开启后已确认马达执行，并确认实际感到了震动。详见 [真机记录](docs/DEVICE-TESTS.md)。
 
-55 项服务端、浏览器及原生桥接检查、15 项安卓单元测试、构建与 Lint 通过。模拟器另验证了加密会话保存、重建与退出、旧凭证迁移、网络限制及模拟电量变化。真机结果与 0.2.0 电脑网关联调结果分别记录。账号响应、播放链接、登录截图与私人验证数据不上传到仓库。长期耗电、发热、耳机/音频焦点事件及多机型兼容性仍待验证。
+60 项服务端、浏览器、渲染及原生桥接检查、15 项安卓单元测试、构建与 Lint 通过。模拟器另验证了加密会话保存、重建与退出、旧凭证迁移、网络限制及模拟电量变化。真机结果与 0.2.0 电脑网关联调结果分别记录。账号响应、播放链接、登录截图与私人验证数据不上传到仓库。长期耗电、发热、耳机/音频焦点事件及多机型兼容性仍待验证。
 
 更完整的说明见 [开发指南](docs/DEVELOPMENT.md)、[版本记录](CHANGELOG.md) 和 [第三方说明](THIRD_PARTY_NOTICES.md)。
 

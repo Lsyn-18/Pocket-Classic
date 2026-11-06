@@ -1,15 +1,18 @@
 import * as THREE from 'three';
 import {createArtworkStore} from './artwork.mjs';
 import {drawBattery} from './battery.mjs';
+import {visualBaseline} from './visual-profile.mjs';
 
-export function makeScreen(app) {
-  const canvas = document.createElement('canvas'); canvas.width=640; canvas.height=480;
+export function makeScreen(app,{pixelScale=4,maxAnisotropy=1,baseline=visualBaseline}={}) {
+  const scale=baseline?2:Math.max(3,Math.min(4,pixelScale));
+  const canvas = document.createElement('canvas'); canvas.width=320*scale; canvas.height=240*scale;
   const c=canvas.getContext('2d'); const texture=new THREE.CanvasTexture(canvas); texture.colorSpace=THREE.SRGBColorSpace;
-  texture.minFilter=THREE.LinearFilter; texture.magFilter=THREE.LinearFilter; texture.generateMipmaps=false;
+  texture.minFilter=baseline?THREE.LinearFilter:THREE.LinearMipmapLinearFilter;texture.magFilter=THREE.LinearFilter;texture.generateMipmaps=!baseline;texture.anisotropy=baseline?1:Math.min(8,maxAnisotropy);
+  const palette=baseline?{}:{'#687b8e':'#465e73','#8593a3':'#5b7185','#7e8b9b':'#5d7286','#8190a0':'#61778a','#7b8a9c':'#566d82','#8090a1':'#5d7386'};
   let lastKey=''; let listLayout=null;
   const artwork=createArtworkStore({resolve:app.native?url=>app.native.artwork(url):undefined});
   function text(value,x,y,maxWidth,font='13px Arial',color='#18222e') {
-    c.font=font;c.fillStyle=color;c.textBaseline='middle';let s=String(value??'');
+    c.font=font;c.fillStyle=palette[color]||color;c.textBaseline='middle';let s=String(value??'');
     while(c.measureText(s).width>maxWidth&&s.length>1)s=s.slice(0,-2)+'…';c.fillText(s,x,y);
   }
   function album(x,y,size,track) {
@@ -28,9 +31,10 @@ export function makeScreen(app) {
     artwork.get(s.current);
     const key=JSON.stringify([s.page,s.selected,s.title,s.current?.id,s.current?.cover,artwork.revision,s.battery?.level,s.battery?.charging,s.nickname,s.connected,s.busy,s.hold,s.sleep,s.mode,s.trial,s.queueMode,s.queue?.length,s.queueIndex,s.tracks?.length,s.playlists?.length,s.noticeError,s.haptics,s.shuffle,s.repeat,s.dark,Math.floor(a?.currentTime||0),a?.paused,a?.volume,app.footerText?.()]);
     if(!force&&key===lastKey)return;lastKey=key;
-    c.setTransform(2,0,0,2,0,0);c.fillStyle=s.sleep?'#151d28':'#fcfdff';c.fillRect(0,0,320,240);listLayout=null;
+    c.setTransform(scale,0,0,scale,0,0);c.fillStyle=s.sleep?'#151d28':'#fcfdff';c.fillRect(0,0,320,240);listLayout=null;
     if(s.sleep){texture.needsUpdate=true;return}
     const head=c.createLinearGradient(0,0,0,24);head.addColorStop(0,'#f7f9fc');head.addColorStop(.5,'#e4e9ef');head.addColorStop(1,'#c0c9d5');c.fillStyle=head;c.fillRect(0,0,320,24);c.fillStyle='#a5afbd';c.fillRect(0,23,320,1);
+    if(!baseline)text(s.title,7,12.5,230,'bold 14px Arial','#fff');
     text(s.title,7,12,230,'bold 14px Arial');
     if(s.hold)text('HOLD',242,12,29,'8px Arial','#6a7584');
     if(a&&!a.paused&&!neutral){c.fillStyle='#3e84bd';c.beginPath();c.moveTo(270,7);c.lineTo(278,12);c.lineTo(270,17);c.closePath();c.fill()}
@@ -53,8 +57,16 @@ export function makeScreen(app) {
     }
     c.fillStyle=s.noticeError?'#fae4bd':'#e8eef5';c.fillRect(0,224,320,16);text(neutral?'Pocket Classic':(app.footerText?.()||(s.connected?'网易云音乐 · '+s.nickname:'选择音乐，开始播放')),6,232,307,'8px Arial',s.noticeError?'#845730':'#8090a1');
     if(s.busy){c.fillStyle='#ffffffd9';c.fillRect(0,24,320,200);text('正在读取音乐…',108,120,150,'12px Arial','#5c7896')}
+    if(!baseline){
+      // Subpixel lattice, kept below 2% opacity so small Chinese text stays clear.
+      c.save();c.strokeStyle='rgba(52,76,98,.018)';c.lineWidth=1/scale;c.beginPath();
+      for(let x=0;x<320;x+=2){c.moveTo(x+.5,24);c.lineTo(x+.5,224)}
+      for(let y=24;y<224;y+=2){c.moveTo(0,y+.5);c.lineTo(320,y+.5)}c.stroke();
+      const edge=c.createLinearGradient(0,24,0,32);edge.addColorStop(0,'rgba(22,41,63,.07)');edge.addColorStop(1,'rgba(22,41,63,0)');c.fillStyle=edge;c.fillRect(0,24,320,8);
+      c.strokeStyle='rgba(27,46,68,.10)';c.lineWidth=.5;c.strokeRect(.25,24.25,319.5,199.5);c.restore();
+    }
     texture.needsUpdate=true;
   }
   draw(true);
-  return {canvas,texture,draw,hit(x,y){if(!listLayout||y<24||y>=224||x>listLayout.width)return null;const i=listLayout.start+Math.floor((y-24)/listLayout.rowH);return i<listLayout.count?i:null;},neutralTexture(){const copy=makeScreen({...app,state:{page:'home',selected:0,title:'iPod'},audio:{paused:true,currentTime:0,volume:.65},entries:()=>[],footerText:()=>''});copy.draw(true,true);return copy.texture;}};
+  return {canvas,texture,draw,pixelScale:scale,dispose(){texture.dispose();},hit(x,y){if(!listLayout||y<24||y>=224||x>listLayout.width)return null;const i=listLayout.start+Math.floor((y-24)/listLayout.rowH);return i<listLayout.count?i:null;},neutralTexture(){const copy=makeScreen({...app,state:{page:'home',selected:0,title:'iPod'},audio:{paused:true,currentTime:0,volume:.65},entries:()=>[],footerText:()=>''},{pixelScale:scale,maxAnisotropy,baseline});copy.draw(true,true);return copy.texture;}};
 }

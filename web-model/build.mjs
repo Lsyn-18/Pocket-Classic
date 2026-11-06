@@ -21,6 +21,7 @@ html=html.replace('熟悉的轮廓。<br>久违的<em>手感。</em>','iPod clas
 html=html.replace('细腻铝壳，嵌入式彩色屏幕。<br>从转轮开始，重新听一首歌。','细腻的银色面板，纯白转轮。<br>轻轻倾斜，光线自然流过。');
 html=html.replace(/<aside class="notes">[\s\S]*?<\/aside>/,`<aside class="notes"><div class="note"><div class="number">01</div><b>光，跟着手走。</b><p>轻移鼠标，或开启手机体感。<br>低灵敏的倾斜，细微的反光。</p></div><div class="note"><div class="number">02</div><b>熟悉的转轮。</b><p>沿圆环画圈浏览菜单，<br>轻按中央键进入歌单。</p></div><div class="note"><div class="number">03</div><b>继续听歌。</b><p>网易云音乐歌单与播放，<br>都留在这个小小屏幕里。</p></div></aside>`);
 html=html.replace('</body>',()=>`<script>${js}</script></body>`);
+if(process.argv.includes('--visual-baseline'))html=html.replace('<script>'+js,()=>'<script>window.PocketClassicVisualProfile="baseline";</script><script>'+js);
 const thirdPartyLicense=fs.readFileSync(path.join(here,'node_modules/three/LICENSE'),'utf8');
 html=html.replace('</head>',()=>`<!--\nThree.js license\n${thirdPartyLicense}\n-->\n</head>`);
 fs.writeFileSync(path.join(here,'THREE-LICENSE.txt'),thirdPartyLicense);

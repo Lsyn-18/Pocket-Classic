@@ -83,6 +83,13 @@ npm run build
 - `wheel-input.mjs`：共用转轮步进，约 0.40 弧度切换一项，连续步进间隔至少 110 毫秒，不累计快速滑动的额外跳项。
 - `artwork.mjs`：封面来源检查、加载缓存与异步结果隔离。
 - `geometry.mjs`：机身、转轮、屏幕和材质。
+- `screen.mjs`：保持 320 × 240 逻辑坐标的高清 LCD 绘制。
+- `visual-profile.mjs`：LCD 质量档位与基线对比开关。
+- `environment.mjs`：一次性程序化摄影棚环境与 PMREM。
+- `atmosphere.mjs`：光池、低饱和强调色、微粒及减少动态效果适配。
+- `studio-floor.mjs`：渐隐模型倒影、接触阴影与地面光池。
+
+0.4.0 的具体参数、模型预算、基线构建方式和验证边界见 [渲染升级](RENDER-UPGRADE.md)。修改材质时注意 Three.js 的 roughnessMap 会与材质 roughness 相乘，normal/roughness 纹理使用 NoColorSpace。不要在每一帧重建环境或重画未变化的 LCD。
 - `screen.mjs`：将实时菜单和播放状态绘制到屏幕纹理。
 - `battery.mjs`：绘制细灰银边框、绿色电芯、低电量配色及充电闪电，继续使用真实设备电量。
 - `studio-floor.mjs`：三维镜像倒影、距离渐隐和柔和接触阴影。
