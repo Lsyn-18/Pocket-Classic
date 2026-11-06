@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="740" viewBox="0 0 900 740" role="img" aria-labelledby="title description">
+  <title id="title">Pocket Classic 界面示意</title>
+  <desc id="description">银色播放器、我的歌单、每日推荐、私人漫游与转轮说明。这是文档示意图，不含真实账号信息。</desc>
+  <defs>
+    <linearGradient id="body" x1="0" x2="1"><stop stop-color="#bbc1c8"/><stop offset=".035" stop-color="#e9edf0"/><stop offset=".2" stop-color="#f6f7f8"/><stop offset=".75" stop-color="#e5e8ec"/><stop offset=".965" stop-color="#f1f4f7"/><stop offset="1" stop-color="#b5bec8"/></linearGradient>
+    <linearGradient id="bar" x2="0" y2="1"><stop stop-color="#fcfdfe"/><stop offset="1" stop-color="#cad3de"/></linearGradient>
+    <linearGradient id="selection" x2="0" y2="1"><stop stop-color="#76bce9"/><stop offset="1" stop-color="#2979c7"/></linearGradient>
+    <linearGradient id="fade" x2="0" y2="1"><stop stop-color="#d4dce5" stop-opacity=".34"/><stop offset="1" stop-color="#eaf0f6" stop-opacity="0"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-200%" width="160%" height="500%"><feGaussianBlur stdDeviation="8"/></filter>
+  </defs>
+  <rect width="900" height="740" rx="22" fill="#f7f9fc"/>
+  <g font-family="Arial,Microsoft YaHei,sans-serif">
+    <text x="54" y="68" fill="#384757" font-size="15" letter-spacing="3">POCKET CLASSIC</text>
+    <text x="54" y="101" fill="#8996a4" font-size="13">转轮 · 网易云音乐 · 轻微体感</text>
+    <ellipse cx="294" cy="645" rx="157" ry="9" fill="#738296" opacity=".2" filter="url(#shadow)"/>
+    <path d="M126 648Q126 638 155 638H433Q462 638 462 648V706H126Z" fill="url(#fade)"/>
+    <rect x="126" y="132" width="336" height="506" rx="32" fill="url(#body)" stroke="#cbd2da"/>
+    <path d="M146 158Q146 145 163 145H425" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width="4"/>
+    <rect x="151" y="164" width="286" height="210" rx="6" fill="#59616d"/>
+    <rect x="157" y="170" width="274" height="198" rx="2" fill="#fafcfe"/>
+    <path d="M157 172H431V197H157Z" fill="url(#bar)"/>
+    <text x="166" y="188" font-size="13" font-weight="700" fill="#2b3745">音乐</text>
+    <rect x="403" y="178" width="19" height="9" rx="1" fill="none" stroke="#829388"/>
+    <rect x="405" y="180" width="13" height="5" fill="#8dad88"/>
+    <text x="168" y="219" font-size="15" fill="#344354">我的歌单</text>
+    <text x="168" y="236" font-size="10" fill="#8a98a7">收藏与创建的歌单</text>
+    <text x="410" y="224" font-size="20" fill="#8a98a7">›</text>
+    <rect x="157" y="246" width="274" height="44" fill="url(#selection)"/>
+    <text x="168" y="265" font-size="15" font-weight="700" fill="white">每日推荐</text>
+    <text x="168" y="281" font-size="10" fill="#e8f4fe">今天为你推荐的歌曲</text>
+    <text x="410" y="273" font-size="20" fill="white">›</text>
+    <text x="168" y="314" font-size="15" fill="#344354">私人漫游</text>
+    <text x="168" y="331" font-size="10" fill="#8a98a7">私人 FM · 连续发现音乐</text>
+    <text x="410" y="320" font-size="20" fill="#8a98a7">›</text>
+    <rect x="157" y="350" width="274" height="18" fill="#e9eff6"/>
+    <text x="165" y="362" font-size="9" fill="#8997a7">转动转轮浏览 · 中央键选择</text>
+    <circle cx="294" cy="501" r="101" fill="#f5f7fa" stroke="#e4e8ed"/>
+    <circle cx="294" cy="501" r="36" fill="#c5cbd3" stroke="#b6bec9"/>
+    <g fill="#9aa6b3" font-size="12" text-anchor="middle"><text x="294" y="427">MENU</text><text x="215" y="506">◀◀</text><text x="373" y="506">▶▶</text><text x="294" y="585">▶Ⅱ</text></g>
+    <g stroke="#bdc9d6" fill="none" stroke-width="1"><path d="M470 205H535"/><path d="M405 502H535"/><path d="M313 602V672H535"/></g>
+    <g fill="#53677d" font-size="15"><text x="558" y="202">音乐，在熟悉的菜单里</text><text x="558" y="499">画圈浏览，轻按选择</text><text x="558" y="670">固定正面，微倾斜与渐隐倒影</text></g>
+    <g fill="#92a0ae" font-size="12"><text x="558" y="226">个人歌单 / 每日推荐 / 私人漫游</text><text x="558" y="523">MENU 返回 · 左右切歌 · HOLD 锁定</text><text x="558" y="694">浏览器开发版界面示意 · 非实测截图</text></g>
+  </g>
+</svg>

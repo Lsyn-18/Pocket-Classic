@@ -1,0 +1,31 @@
+# Local sessions, credentials, private verification data and toolchains
+/work/
+/outputs/
+**/runtime/
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+key.properties
+**/local.properties
+
+# Dependencies and generated builds
+**/node_modules/
+**/dist/
+**/build/
+**/.gradle/
+**/.kotlin/
+*.apk
+*.aab
+*.apks
+*.log
+*.tsbuildinfo
+
+# Editor and operating system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,49 @@
+.layout{grid-template-columns:1fr minmax(320px,440px) 1fr;gap:4vw;padding-top:16px;padding-bottom:18px;max-width:1340px}
+.model-wrap{width:100%;max-width:440px;height:calc(100svh - 130px);min-height:490px;max-height:690px;container-type:normal;isolation:isolate}
+body{background:radial-gradient(ellipse at 50% 24%,#ffffff 0%,#f6f8fb 52%,#eaf0f5 100%)}
+.model-wrap:after{display:none}
+.model-wrap>.device{position:absolute;left:-10000px;top:0;width:360px;height:603px;visibility:hidden;pointer-events:none;container-type:inline-size}
+#modelViewport{position:absolute;inset:0 0 65px;touch-action:none;outline:none}
+#modelViewport canvas{display:block;width:100%;height:100%;touch-action:none}
+.model-hit-controls{position:absolute;inset:0;pointer-events:none}.model-hit-controls button{position:absolute;left:0;top:0;padding:0;border:0;background:transparent;opacity:0;pointer-events:auto;border-radius:50%;cursor:pointer;touch-action:none}.model-hit-controls button:focus-visible{opacity:1;background:#347bc917;outline:1px solid #6599bd}
+#modelStatus{position:absolute;left:0;right:0;bottom:45px;text-align:center;font-size:9px;color:#8c969f;letter-spacing:.03em}
+#frontColor{position:absolute;right:5px;bottom:76px;width:24px;height:24px;border-radius:50%;border:3px solid #e9ecf0;outline:1px solid #c2c8cf;background:linear-gradient(135deg,#cbd1d7 50%,#333a43 51%);cursor:pointer}
+.motion-controls{position:absolute;bottom:0;left:0;right:0;display:flex;justify-content:center;gap:8px}
+.motion-controls button{font:inherit;font-size:10px;letter-spacing:.04em;color:#596571;background:#f8f9faad;border:1px solid #d6dce0;border-radius:20px;min-height:36px;padding:0 15px;cursor:pointer}
+.motion-controls button[aria-pressed=true]{background:#e5ebef;color:#344654;border-color:#b8c5cf}.motion-controls button:focus-visible{outline:2px solid #6599bd;outline-offset:3px}.motion-controls button[hidden]{display:none}
+.player-tools,.player-options-panel{display:contents}.tool-label,#playerOptionsToggle,#fullscreenToggle{display:none}
+#motionCalibrate{position:absolute;bottom:0;left:calc(50% + 46px);min-height:36px;padding:0 12px;border:1px solid #d6dce0;border-radius:20px;background:#f8f9faad;color:#596571;font-size:10px}#motionCalibrate[hidden]{display:none}
+.notes{max-width:180px}.intro h1{font-size:38px}.note b{font-size:10px}
+@media(max-width:1000px){.layout{display:block;padding:12px 16px 18px}.intro,.notes{display:none}.model-wrap{margin:auto;max-width:440px}}
+@media(max-width:1000px){
+  html,body{width:100%;height:100%;min-height:0;overflow:hidden;overscroll-behavior:none}
+  body{background:radial-gradient(ellipse at 50% 24%,#ffffff 0%,#f7f9fc 55%,#ecf1f6 100%)}
+  header,footer,.intro,.notes{display:none!important}
+  .layout{display:block;width:100%;height:100vh;height:100dvh;min-height:0;max-width:none;margin:0;padding:0}
+  .model-wrap{width:100%;height:100%;min-height:0;max-width:none;max-height:none;margin:0;container-type:normal}
+  .model-wrap:after{display:none}
+  #modelViewport{inset:max(8px,env(safe-area-inset-top)) max(4px,env(safe-area-inset-right)) calc(68px + env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left))}
+  .player-tools{position:absolute;left:50%;bottom:calc(10px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;align-items:center;gap:4px;width:max-content;max-width:calc(100% - 16px);height:44px;padding:3px 5px;border:1px solid #ffffffa3;border-radius:25px;background:#f2f5f7b8;backdrop-filter:blur(16px);box-shadow:0 3px 12px #3345560a;z-index:5}
+  .player-tools #account,.player-tools .motion-controls button,#playerOptionsToggle{position:static;min-height:36px;border:0;border-radius:20px;background:transparent;padding:0 12px;color:#526170;font:11px 'Helvetica Neue','Microsoft YaHei',sans-serif;letter-spacing:0;white-space:nowrap}
+  #account .dot{margin-right:6px}.motion-controls{position:static;display:flex;gap:0}
+  .player-tools .motion-controls button[aria-pressed=true]{background:#dce5eb;color:#2c4b61}
+  #playerOptionsToggle{display:grid;place-items:center;width:38px;padding:0}#playerOptionsToggle svg{width:22px;height:22px;fill:currentColor}
+  #playerOptionsToggle[aria-expanded=true]{background:#dce5eb}
+  .player-options-panel{display:none;position:absolute;right:0;bottom:calc(100% + 10px);min-width:164px;padding:6px;border:1px solid #ffffffa3;border-radius:16px;background:#f2f5f7f5;box-shadow:0 8px 26px #33455616}
+  .options-open .player-options-panel{display:flex;flex-direction:column;gap:2px}
+  .player-options-panel #frontColor,.player-options-panel #motionCalibrate,.player-options-panel #fullscreenToggle{position:static;display:block;width:100%;min-height:44px;height:auto;outline:0;border:0;border-radius:10px;padding:0 12px;background:none;color:#526170;font-size:12px;text-align:left}
+  .player-options-panel button:hover{background:#e1e8ed!important}.player-options-panel button:focus-visible{outline:2px solid #6599bd!important;outline-offset:-2px}
+  .player-options-panel button[hidden]{display:none!important}.tool-label{display:inline}
+  #modelStatus{bottom:calc(68px + env(safe-area-inset-bottom));left:50%;right:auto;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);padding:7px 11px;border-radius:16px;background:#f3f6f8e8;color:#657585;font-size:10px;line-height:1.5;z-index:4}
+  #modelViewport:is([data-motion=off],[data-motion=active]):not([data-notice])~#modelStatus{opacity:0;pointer-events:none}
+  .dialog{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;padding:22px}
+}
+@media(max-width:1000px) and (max-height:600px) and (orientation:landscape){
+  #modelViewport{inset:max(6px,env(safe-area-inset-top)) calc(76px + env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left))}
+  .player-tools{left:auto;right:calc(10px + env(safe-area-inset-right));top:50%;bottom:auto;transform:translateY(-50%);flex-direction:column;justify-content:center;gap:6px;width:54px;max-width:none;height:auto;padding:7px 3px;border-radius:27px}
+  .player-tools #account{position:relative;width:44px;min-height:44px;padding:0;font-size:0}.player-tools #account .dot{position:absolute;top:6px;right:3px;margin:0;width:4px;height:4px}.player-tools #account:after{content:'音乐';font-size:10px}
+  .player-tools .motion-controls button{width:44px;min-height:44px;padding:3px 8px;font-size:10px;white-space:normal;line-height:1.4}
+  #playerOptionsToggle{width:44px;min-height:44px}
+  .player-options-panel{right:calc(100% + 10px);bottom:0}
+  #modelStatus{bottom:8px;max-width:calc(100% - 100px);left:calc(50% - 38px)}
+}
