@@ -78,7 +78,9 @@ class NetEaseApi(private val store: MusicSessionStore) {
             val t=list.optJSONObject(i)?:continue;val id=t.optLong("id");if(id<=0||!seen.add(id))continue
             val artists=t.optJSONArray("ar")?:t.optJSONArray("artists")?:JSONArray()
             val names=(0 until artists.length()).mapNotNull { artists.optJSONObject(it)?.optString("name")?.takeIf(String::isNotBlank) }
-            result.put(JSONObject().put("id",id).put("name",t.optString("name","未知歌曲")).put("artist",names.joinToString(" / ").ifBlank { "未知歌手" }).put("durationMs",t.optLong("dt",t.optLong("duration"))).put("fee",t.optInt("fee")))
+            val album=t.optJSONObject("al")?:t.optJSONObject("album")
+            result.put(JSONObject().put("id",id).put("name",t.optString("name","未知歌曲")).put("artist",names.joinToString(" / ").ifBlank { "未知歌手" }).put("durationMs",t.optLong("dt",t.optLong("duration"))).put("fee",t.optInt("fee"))
+                .put("cover",ArtworkPolicy.url(album?.optString("picUrl").orEmpty())?:"").put("album",album?.optString("name").orEmpty().take(1000)))
         }
         return result
     }

@@ -86,7 +86,7 @@ class IntegratedPlayerTest {
         val center=rectangle("中央选择键");val right=rectangle("下一曲，长按快进")
         val cx=center.getDouble("x")+center.getDouble("width")/2;val cy=center.getDouble("y")+center.getDouble("height")/2
         val radius=right.getDouble("x")+right.getDouble("width")/2-cx
-        touch((0..4).map { val a=it*.18/4;Pair(cx+radius*cos(a),cy+radius*sin(a)) })
+        touch((0..8).map { val a=it*.44/8;Pair(cx+radius*cos(a),cy+radius*sin(a)) })
     }
     @Test fun packagedInterfacePlaybackAndBackgroundRadio() {
         val context=instrumentation.targetContext; val args=InstrumentationRegistry.getArguments()
@@ -108,6 +108,18 @@ class IntegratedPlayerTest {
             step("Page bounds: " + js("JSON.stringify({width:document.documentElement.clientWidth,height:document.documentElement.clientHeight,viewport:document.getElementById('modelViewport').getBoundingClientRect().toJSON(),canvas:document.querySelector('canvas').getBoundingClientRect().toJSON(),center:document.querySelector('.model-hit-controls button[aria-label=\"中央选择键\"]').getBoundingClientRect().toJSON()})"))
             instrumentation.uiAutomation.takeScreenshot().also { bitmap -> File(context.filesDir,"pocketclassic-startup.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) };bitmap.recycle() }
             assertEquals("true",js("!!window.PocketClassicContext.native"))
+            ready("Number.isFinite(window.PocketClassicContext.state.battery.level)")
+            step("System battery available: " + js("JSON.stringify(window.PocketClassicContext.state.battery)"))
+            if (!authenticated) {
+                try {
+                    instrumentation.uiAutomation.executeShellCommand("cmd battery unplug").use { descriptor -> FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } }
+                    instrumentation.uiAutomation.executeShellCommand("cmd battery set level 37").use { descriptor -> FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } }
+                    ready("Math.round(window.PocketClassicContext.state.battery.level*100)===37")
+                    instrumentation.uiAutomation.executeShellCommand("cmd battery set level 72").use { descriptor -> FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } }
+                    ready("Math.round(window.PocketClassicContext.state.battery.level*100)===72")
+                    step("Live battery changes reached the rendered player")
+                } finally { instrumentation.uiAutomation.executeShellCommand("cmd battery reset").use { descriptor -> FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } } }
+            }
             assertEquals("true",js("document.documentElement.clientWidth===document.documentElement.scrollWidth&&document.documentElement.clientHeight===document.documentElement.scrollHeight"))
             tap("中央选择键");ready("window.PocketClassicContext.state.page==='music'")
             assertTrue(js("JSON.stringify(window.PocketClassicContext.entries())").contains("每日推荐"))

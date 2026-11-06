@@ -11,7 +11,13 @@ test('both recommendation routes require an authenticated session', async () => 
 test('normalizes both NetEase song formats and excludes private/upstream fields', () => {
   const list = normalizeTracks([song(), {...song(2),ar:undefined,artists:[{name:'Other'}],dt:undefined,duration:150000}, song(), {id:'bad',name:'x'}, null]);
   assert.equal(list.length,2); assert.equal(list[1].artist,'Other'); assert.equal(list[1].durationMs,150000);
-  assert.deepEqual(Object.keys(list[0]).sort(),['id','name','artist','durationMs','fee'].sort());
+  assert.deepEqual(Object.keys(list[0]).sort(),['id','name','artist','durationMs','fee','cover','album'].sort());
+});
+
+test('both upstream album formats retain HTTPS covers without allowing arbitrary hosts',()=>{
+  const list=normalizeTracks([{...song(1),al:{name:'Album A',picUrl:'http://p1.music.126.net/a/1.jpg'}},{...song(2),album:{name:'Album B',picUrl:'https://p2.music.126.net/b/2.jpg?param=100y100'}},{...song(3),al:{picUrl:'https://p1.music.126.net.evil.example/a.jpg'}}]);
+  assert.equal(list[0].cover,'https://p1.music.126.net/a/1.jpg?param=320y320');assert.equal(list[0].album,'Album A');
+  assert.equal(list[1].cover,'https://p2.music.126.net/b/2.jpg?param=320y320');assert.equal(list[1].album,'Album B');assert.equal(list[2].cover,'');
 });
 test('daily requests coalesce and use a short session-specific cache', async () => {
   let called=0,clock=100,session={authenticated:true,cookie:'private-A'};

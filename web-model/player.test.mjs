@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {createRoamStream} from './roam-stream.mjs';
+import {createWheelInput} from './wheel-input.mjs';
+import {coverUrl} from './artwork.mjs';
 const source=fs.readFileSync(new URL('./player.mjs',import.meta.url),'utf8').replace(/^import[^\n]+\n/gm,'');
 const song=id=>({id,name:'Track '+id,artist:'Artist',durationMs:120000});
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -16,7 +18,7 @@ function fixture(routes={}){
   Object.assign(element('audio'),{paused:true,currentTime:0,duration:120,volume:.65,load(){},pause(){this.paused=true;},async play(){this.paused=false;playCount++;}});
   const document={getElementById:element,body:element('body'),querySelector:selector=>selector==='.device'?element('device'):null,querySelectorAll:()=>[],createElement:()=>element('spinner'),addEventListener(){}};
   const window={};const fetch=async(url,options)=>{const route=url.slice(5),handler=routes[route.split('?')[0]];const body=options?.body?JSON.parse(options.body):null;const result=handler?await handler(body,route):route==='resolve'?{url:'https://test.music.126.net/test.mp3',trial:null}:{playlists:[]};return {ok:!result.error,json:async()=>result};};
-  vm.runInNewContext(source,{window,document,navigator:{},location:{protocol:'file:'},fetch,createRoamStream,console,setTimeout,clearTimeout,setInterval,clearInterval,MediaMetadata:class{}});
+  vm.runInNewContext(source,{window,document,navigator:{},location:{protocol:'file:'},fetch,createRoamStream,createWheelInput,coverUrl,console,setTimeout,clearTimeout,setInterval,clearInterval,MediaMetadata:class{}});
   const app=window.PocketClassicContext;app.state.connected=true;
   return {app,elements,listeners,get playCount(){return playCount;}};
 }

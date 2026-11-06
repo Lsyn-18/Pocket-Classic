@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.os.SystemClock
 import android.content.ComponentName
 import android.os.Bundle
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -197,8 +198,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 fun mediaItem(track: MusicTrack, mode: String, session: String): MediaItem = MediaItem.Builder()
     .setMediaId(track.id.toString()).setUri("pocketclassic://track/" + track.id)
     .setMediaMetadata(MediaMetadata.Builder().setTitle(track.name).setArtist(track.artist)
+        .setAlbumTitle(track.album).setArtworkUri(ArtworkPolicy.url(track.cover)?.let(Uri::parse))
         .setExtras(Bundle().apply { putLong("duration", track.durationMs); putString("mode", mode); putString("queueSession", session) }).build()).build()
 
 fun trackJson(item: MediaItem): JSONObject = JSONObject().put("id", item.mediaId.toLongOrNull() ?: 0)
     .put("name", item.mediaMetadata.title?.toString() ?: "").put("artist", item.mediaMetadata.artist?.toString() ?: "")
     .put("durationMs", item.mediaMetadata.extras?.getLong("duration") ?: 0)
+    .put("cover", item.mediaMetadata.artworkUri?.toString() ?: "").put("album", item.mediaMetadata.albumTitle?.toString() ?: "")

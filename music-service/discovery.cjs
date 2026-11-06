@@ -1,3 +1,6 @@
+function coverUrl(raw) {
+  try { const url=new URL(raw);if(!['https:','http:'].includes(url.protocol)||!/^p[1-9]\.music\.126\.net$/.test(url.hostname)||url.username||url.password||url.port)return '';url.protocol='https:';url.hash='';url.searchParams.set('param','320y320');return url.href; }catch{return '';}
+}
 function normalizeTracks(items) {
   if (!Array.isArray(items)) throw new Error('网易云返回的推荐列表暂时无法识别');
   const seen = new Set();
@@ -7,8 +10,10 @@ function normalizeTracks(items) {
     seen.add(id);
     const duration = Number(track.dt ?? track.duration ?? track.durationMs ?? 0);
     const artists = track.ar || track.artists;
+    const album = track.al || track.album;
     return [{ id, name: track.name, artist: Array.isArray(artists) ? artists.map(a => a?.name).filter(n => typeof n === 'string').join(' / ') : '未知歌手',
-      durationMs: Number.isFinite(duration) && duration > 0 ? duration : 0, fee: Number(track.fee) || 0 }];
+      durationMs: Number.isFinite(duration) && duration > 0 ? duration : 0, fee: Number(track.fee) || 0,
+      cover: coverUrl(album?.picUrl), album: typeof album?.name === 'string' ? album.name : '' }];
   });
 }
 

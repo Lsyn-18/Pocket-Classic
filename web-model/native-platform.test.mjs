@@ -47,6 +47,15 @@ test('preferences synchronize only after boot and are deduplicated',async()=>{
   const f=await fixture();f.platform.syncPreferences({dark:true,haptics:false});const count=f.messages.length;f.platform.syncPreferences({dark:true,haptics:false});assert.equal(f.messages.length,count);
   assert.equal(f.messages.at(-1).method,'preferences');
 });
+
+test('battery events retain the latest real device value and artwork uses a native request',async()=>{
+  const f=await fixture(),values=[];
+  f.platform.receive({type:'battery',value:{level:.37,charging:false}});f.platform.onBattery(value=>values.push(value));
+  f.platform.receive({type:'battery',value:{level:.38,charging:true}});assert.deepEqual(values,[{level:.37,charging:false},{level:.38,charging:true}]);
+  const task=f.platform.artwork('https://p1.music.126.net/test.jpg');assert.equal(f.messages.at(-1).method,'artwork');
+  f.respond(f.messages.at(-1),{dataUrl:'data:image/jpeg;base64,test'});assert.equal(await task,'data:image/jpeg;base64,test');
+  f.platform.vibrate();assert.equal(f.messages.at(-1).method,'haptic');
+});
 test('oversized bridge messages fail locally and timeouts release pending requests',async()=>{
   const f=await fixture(),count=f.messages.length;await assert.rejects(f.platform.request('queue',{name:'x'.repeat(1_900_000)}),/歌单过大/);assert.equal(f.messages.length,count);
   const request=f.platform.api('daily');[...f.timers.values()].at(-1)();await assert.rejects(request,/响应超时/);

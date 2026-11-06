@@ -2,7 +2,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { root, call, errorSummary, prepareKey } = require('./bridge.cjs');
-const { createDiscovery } = require('./discovery.cjs');
+const { createDiscovery, normalizeTracks } = require('./discovery.cjs');
 const PORT = 17863;
 const origin = `http://127.0.0.1:${PORT}`;
 let cookie = '';
@@ -19,7 +19,6 @@ function send(res, value, status = 200) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
   res.end(JSON.stringify(value));
 }
-function cleanTrack(t) { return { id: t.id, name: t.name, artist: (t.ar || t.artists || []).map(a => a.name).join(' / '), durationMs: t.dt || t.duration, fee: t.fee }; }
 async function playlists() {
   if (!cookie || !snapshot.userId) throw new Error('请先扫码登录');
   const r = await call('user_playlist', { uid: snapshot.userId, limit: 100 }, cookie);
@@ -30,7 +29,7 @@ async function tracks(id) {
   const r = await call('playlist_detail', { id }, cookie);
   if (r.body.code !== 200 || !r.body.playlist) throw { body: r.body };
   return { id: r.body.playlist.id, name: r.body.playlist.name, trackCount: r.body.playlist.trackCount,
-    tracks: (r.body.playlist.tracks || []).map(cleanTrack) };
+    tracks: normalizeTracks(r.body.playlist.tracks || []) };
 }
 async function resolve(id) {
   const r = await call('song_url_v1', { id, level: 'standard', unblock: 'false' }, cookie);

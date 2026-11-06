@@ -1,5 +1,5 @@
 export function createNativePlatform(transport, host = window) {
-  let sequence=0,playbackListener,connectionListener,lastSnapshot,transitioning=false,preferencesReady=false,lastPreferences='';
+  let sequence=0,playbackListener,connectionListener,batteryListener,lastBattery,lastSnapshot,transitioning=false,preferencesReady=false,lastPreferences='';
   const pending=new Map(),motionListeners=new Set(),visibilityListeners=new Set();
   function request(method,args={}) {
     const id=++sequence;
@@ -43,6 +43,8 @@ export function createNativePlatform(transport, host = window) {
     },
     next:()=>request('next'),previous:()=>request('previous'),configure:options=>fire('configure',options),
     vibrate:()=>fire('haptic'),
+    artwork:async url=>(await request('artwork',{url})).dataUrl,
+    onBattery(listener){batteryListener=listener;if(lastBattery)listener(lastBattery);},
     syncPreferences(value){if(!preferencesReady)return;const text=JSON.stringify(value);if(text!==lastPreferences){lastPreferences=text;fire('preferences',value);}},
     onPlayback(listener){playbackListener=listener;if(lastSnapshot)listener(lastSnapshot);},
     onConnection(listener){connectionListener=listener;},
@@ -57,11 +59,12 @@ export function createNativePlatform(transport, host = window) {
         if(packet.ok)task.resolve(packet.result);else task.reject(Error(packet.error||'手机操作暂时无法完成'));
       }else if(packet.type==='playback')snapshot(packet.value);
       else if(packet.type==='connection')connectionListener?.();
+      else if(packet.type==='battery'){lastBattery=packet.value;batteryListener?.(lastBattery);}
       else if(packet.type==='orientation')for(const listener of motionListeners)listener(packet.value);
       else if(packet.type==='lifecycle')for(const listener of visibilityListeners)listener(!!packet.visible);
     },
   };
   host.PocketClassicNative=platform;
-  platform.ready=request('ready').then(value=>{snapshot(value);preferencesReady=true;return value;});
+  platform.ready=request('ready').then(value=>{if(value.battery){lastBattery=value.battery;batteryListener?.(lastBattery);}snapshot(value);preferencesReady=true;return value;});
   return platform;
 }

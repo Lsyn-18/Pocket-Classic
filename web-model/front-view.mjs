@@ -4,6 +4,7 @@ import { createClassic, dimensions as D } from './geometry.mjs';
 import { makeScreen } from './screen.mjs';
 import { createMotionControl } from './motion.mjs';
 import { createStudioFloor } from './studio-floor.mjs';
+import { createWheelInput } from './wheel-input.mjs';
 
 const app=window.PocketClassicContext,host=document.getElementById('modelViewport'),status=document.getElementById('modelStatus');
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance',preserveDrawingBuffer:true});
@@ -70,7 +71,7 @@ function pick(e){const r=host.getBoundingClientRect();pointer.set((e.clientX-r.l
 function wheelAction(p){const x=p.x,y=p.y-D.wheelY;if(Math.hypot(x,y)<.70)return 'select';return Math.abs(y)>Math.abs(x)?(y>0?'menu':'play'):(x<0?'previous':'next')}
 function release(){clearTimeout(holdTimer);clearInterval(seekTimer);classic.center.position.z=.493}
 host.addEventListener('pointerdown',e=>{if(e.button!==0)return;const hit=pick(e);if(!hit||hit.zone==='case')return;const p=hit.point;
-  gesture={id:e.pointerId,zone:hit.zone,point:p.clone(),angle:Math.atan2(p.y-D.wheelY,p.x),sum:0,moved:false,held:false,x:e.clientX,y:e.clientY,action:hit.zone==='wheel'?wheelAction(p):null};
+  gesture={id:e.pointerId,zone:hit.zone,point:p.clone(),angle:Math.atan2(p.y-D.wheelY,p.x),sum:0,dial:createWheelInput(),moved:false,held:false,x:e.clientX,y:e.clientY,action:hit.zone==='wheel'?wheelAction(p):null};
   host.setPointerCapture(e.pointerId);if(gesture.action==='select'&&!app.state.hold)classic.center.position.z=.470;
   if(hit.zone==='wheel')holdTimer=setTimeout(()=>{if(gesture&&!gesture.moved){gesture.held=true;app.action(gesture.action,true);if(['previous','next'].includes(gesture.action))seekTimer=setInterval(()=>app.action(gesture?.action,true),180)}},480);
 });
@@ -78,7 +79,7 @@ host.addEventListener('pointermove',e=>{
   if(!gesture){if(e.pointerType!=='touch'&&!motion.state.enabled&&!reducedMotion.matches){const r=host.getBoundingClientRect();targetY=-.025+((e.clientX-r.left)/r.width-.5)*.07;targetX=-.008+((e.clientY-r.top)/r.height-.5)*.035}return}
   if(gesture.zone!=='wheel'||app.state.hold||Math.hypot(gesture.point.x,gesture.point.y-D.wheelY)<.70)return;
   const hit=pick(e);if(hit?.zone!=='wheel')return;const a=Math.atan2(hit.point.y-D.wheelY,hit.point.x);let delta=a-gesture.angle;while(delta>Math.PI)delta-=Math.PI*2;while(delta<-Math.PI)delta+=Math.PI*2;gesture.angle=a;gesture.sum-=delta;
-  if(Math.abs(gesture.sum)>.065){gesture.moved=true;release()}const steps=Math.trunc(gesture.sum/.15);if(steps){gesture.sum-=steps*.15;app.rotate(Math.max(-4,Math.min(4,steps)))}
+  if(Math.abs(gesture.sum)>.065){gesture.moved=true;release()}const step=gesture.dial.move(-delta,e.timeStamp);if(step)app.rotate(step);
 });
 host.addEventListener('pointerup',e=>{const g=gesture;release();gesture=null;if(!g||g.id!==e.pointerId||g.moved||g.held)return;
   if(g.zone==='hold'){app.state.hold=!app.state.hold;app.render();return}if(g.zone==='wheel'){app.action(g.action);return}

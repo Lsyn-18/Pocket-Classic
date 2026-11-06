@@ -2,7 +2,6 @@ package com.pocketclassic.player
 
 import android.annotation.SuppressLint
 import android.graphics.Color
-import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
@@ -30,6 +29,9 @@ class NativePlayerHost(
     private var foreground = false
     private var revision = -1L
     private val motion = NativeMotion(activity) { value -> emit(JSONObject().put("type", "orientation").put("value", value)) }
+    private val battery = NativeBattery(activity) { value -> if (ready && foreground) emit(JSONObject().put("type", "battery").put("value", value)) }
+    private val haptics = NativeHaptics(activity)
+    private val artwork = NativeArtwork()
     val webView: WebView
     init {
         webView = WebView(activity).apply {
@@ -53,7 +55,7 @@ class NativePlayerHost(
                     return WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
                 }
                 override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
-                    ready = false; destroyed = true; motion.destroy()
+                    ready = false; destroyed = true; motion.destroy(); battery.stop()
                     (view.parent as? ViewGroup)?.removeView(view); view.destroy()
                     onError("系统释放了播放器界面，请重新打开应用。音乐仍由后台服务管理。"); return true
                 }
@@ -84,7 +86,7 @@ class NativePlayerHost(
                 val method = message.getString("method"); require(method in NativeContract.methods)
                 val args = message.optJSONObject("args") ?: JSONObject()
                 val result: Any = when (method) {
-                    "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true) }
+                    "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true).put("battery", battery.read()) }
                     "api" -> vm.browserApi(args.getString("route"))
                     "connection" -> { vm.showConnection(); JSONObject() }
                     "queue" -> { beforePlay(); vm.startQueue(args); revision = vm.queueRevision; vm.snapshot(true) }
@@ -95,7 +97,8 @@ class NativePlayerHost(
                     "preferences" -> { vm.preferences(args); JSONObject() }
                     "motionAvailable" -> JSONObject().put("available", motion.available)
                     "motion" -> { motion.enable(args.optBoolean("enabled")); JSONObject() }
-                    "haptic" -> { activity.window.decorView.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); JSONObject() }
+                    "haptic" -> { if (foreground) haptics.tick(); JSONObject() }
+                    "artwork" -> JSONObject().put("dataUrl", artwork.load(args.getString("url")))
                     "finish" -> { activity.finish(); JSONObject() }
                     else -> throw IllegalArgumentException("不支持此操作")
                 }
@@ -119,15 +122,15 @@ class NativePlayerHost(
     fun resume() {
         if (destroyed) return
         foreground = true; webView.resumeTimers(); webView.onResume()
-        emit(JSONObject().put("type", "lifecycle").put("visible", true)); motion.foreground(true)
+        emit(JSONObject().put("type", "lifecycle").put("visible", true)); motion.foreground(true); battery.start()
     }
     fun pause() {
-        foreground = false; motion.foreground(false)
+        foreground = false; motion.foreground(false); battery.stop()
         if (destroyed) return
         val packet = JSONObject().put("type", "lifecycle").put("visible", false)
         webView.evaluateJavascript("window.PocketClassicNative&&window.PocketClassicNative.receive(" + packet.toString() + ");") {
             if (!foreground && !destroyed) { webView.onPause(); webView.pauseTimers() }
         }
     }
-    fun destroy() { if (destroyed) return; destroyed = true; motion.destroy(); webView.removeJavascriptInterface("PocketNative"); webView.destroy() }
+    fun destroy() { if (destroyed) return; destroyed = true; motion.destroy(); battery.stop(); webView.removeJavascriptInterface("PocketNative"); webView.destroy() }
 }

@@ -32,6 +32,10 @@ flowchart LR
 
 Media3 服务负责音频、通知栏、音频焦点及漫游队列续歌；界面停止后仍可播放。安卓原生旋转向量传感器输出 beta/gamma，再复用浏览器的校准、死区及平滑逻辑。安卓不需要电脑服务，默认禁止局域网 HTTP 请求；仅为网易云音频 CDN 保留明文兼容例外。
 
+0.3.1 增加设备反馈：`NativeBattery` 在前台监听系统电量广播，首次加载与回到前台时同步当前值；不需要新增权限。`NativeHaptics` 使用现有 VIBRATE 权限调用马达，优先使用系统轻触效果，回退到 8 毫秒脉冲并限制重复频率；由播放器的「触感反馈」控制。
+
+专辑封面与专辑名在歌曲列表、原生队列和状态同步中保留。`NativeArtwork` 仅接受网易云 `p1` 至 `p9.music.126.net` 的 HTTPS 图片，限制下载体积和解码尺寸、禁止跳转，并缓存 320 像素缩略图。图片以 data URL 返回，不向 WebView 开放网络或账号凭证。`artwork.mjs` 按当前封面键读取，避免旧封面晚到覆盖新歌；浏览器使用匿名跨域图片，加载失败保留占位图。
+
 原生关键文件：`NetEaseCrypto.kt` 负责编码请求；`NetEaseApi.kt` 直连网易云并清理返回给界面的字段；`MusicSessionStore.kt` 加密保存会话；`NetEaseLoginDialog.kt` 和 `LoginQrImage.kt` 生成授权界面与保存本次二维码。二维码授权完成后才保存会话，旧登录任务和旧账号请求均有代次隔离。
 
 正式一键唤端登录需开放平台 AppId、应用登记信息、回调域名及网易云配置的回跳 Scheme，返回的官方令牌与当前社区接口 cookie 不互通，后续音乐接口也要配套接入。官方文档建议在服务端兑换和刷新令牌；可使用云函数而非个人电脑，具体以应用获准的接入方式为准。
@@ -76,6 +80,8 @@ npm run build
 - `player.mjs`：菜单、账号、播放状态与队列切换。
 - `native-platform.mjs`：安卓消息桥、原生播放状态镜像和传感器生命周期。
 - `roam-stream.mjs`：漫游批次请求、最近歌曲去重和旧会话结果丢弃。
+- `wheel-input.mjs`：共用转轮步进，约 0.40 弧度切换一项，连续步进间隔至少 110 毫秒，不累计快速滑动的额外跳项。
+- `artwork.mjs`：封面来源检查、加载缓存与异步结果隔离。
 - `geometry.mjs`：机身、转轮、屏幕和材质。
 - `screen.mjs`：将实时菜单和播放状态绘制到屏幕纹理。
 - `studio-floor.mjs`：三维镜像倒影、距离渐隐和柔和接触阴影。
@@ -115,7 +121,7 @@ npm run build
 在根目录运行所有服务端与浏览器逻辑检查：
 
 ```sh
-node --test music-service/discovery.test.cjs music-service/gateway.test.cjs web-model/motion.test.mjs web-model/roam-stream.test.mjs web-model/player.test.mjs web-model/native-platform.test.mjs
+node --test music-service/discovery.test.cjs music-service/gateway.test.cjs web-model/motion.test.mjs web-model/roam-stream.test.mjs web-model/player.test.mjs web-model/native-platform.test.mjs web-model/wheel-input.test.mjs web-model/artwork.test.mjs
 ```
 
 逻辑检查覆盖访问控制、凭证清理、推荐缓存、会话切换、漫游去重、并发续歌、过期响应隔离、原生消息桥、播放流程和体感滤波。检查使用合成数据，不需要网易云账号；实际账号联调单独验证。
@@ -132,6 +138,8 @@ Android Studio 中配置 SDK 即可；命令行构建可以设置 `ANDROID_HOME`
 安卓单元测试覆盖接口与资源白名单、旋转矩阵转换、漫游去重、旧会话隔离和请求编码的独立 Node.js 向量。`MusicSessionStoreTest` 在隔离的测试偏好存储中验证加密会话重建、退出、旧网关凭证迁移与局域网 HTTP 限制，不覆盖用户当前会话。
 
 `StandaloneLoginTest` 在安卓真实界面生成二维码，使用 `authorize=true` 参数显式启动需要用户确认的直连账号联调；默认跳过此交互测试。它验证账号、歌单、日推、漫游和音源解析，无需电脑地址或配对码。`IntegratedPlayerTest` 默认验证本地三维界面与触摸，提供 `authenticated=true` 时继续验证已有手机会话下的日推原生解码、漫游前台和后台跨批次续歌及横竖屏切换。上游歌曲可用性受账号权限影响，私人响应与登录截图不提交。
+
+`DeviceFeaturesTest` 使用合成图片验证安卓实际解码、缩略图缓存与队列封面元数据传递。未登录的 `IntegratedPlayerTest` 还会临时改变测试设备的系统电量并确认界面更新，结束后恢复系统电池状态；只在开发者的隔离模拟器运行，不在用户手机上自动执行此测试。实体震感和真实 CDN 下载不由这些离线检查代替。
 
 0.2.0 曾在 Android 15 模拟器通过电脑网关完成完整播放联调；0.3.0 的独立登录与账号接口需要新的手机会话授权，验证状态须单独记录，不继承旧结果。真机体感与性能仍待验证。
 

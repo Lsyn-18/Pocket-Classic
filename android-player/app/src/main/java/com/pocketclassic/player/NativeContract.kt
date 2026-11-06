@@ -4,7 +4,7 @@ object NativeContract {
     const val ORIGIN = "https://appassets.androidplatform.net"
     const val PLAYER_PATH = "/assets/player.html"
     const val NEXT = "pocketclassic.next"
-    val methods = setOf("ready", "api", "connection", "queue", "play", "pause", "next", "previous", "seek", "volume", "configure", "preferences", "motionAvailable", "motion", "haptic", "finish")
+    val methods = setOf("ready", "api", "connection", "queue", "play", "pause", "next", "previous", "seek", "volume", "configure", "preferences", "motionAvailable", "motion", "haptic", "artwork", "finish")
     fun allowedApi(route: String) = route in setOf("status", "playlists", "daily", "roam") || Regex("tracks\\?id=[1-9][0-9]{0,15}").matches(route)
     fun trustedAsset(scheme: String?, host: String?, path: String?) = scheme == "https" && host == "appassets.androidplatform.net" && path == PLAYER_PATH
     fun validMode(mode: String) = mode in setOf("playlist", "daily", "roam")
