@@ -36,16 +36,16 @@ class PlaybackService : MediaSessionService() {
     private val radio = RadioContinuation()
     private var radioJob: Job? = null
     private var advanceFrom: String? = null
-    private lateinit var store: ConnectionStore
+    private lateinit var store: MusicSessionStore
+    private lateinit var api: NetEaseApi
 
     override fun onCreate() {
         super.onCreate()
-        store = ConnectionStore(this)
+        store = MusicSessionStore(this); api = NetEaseApi(store)
         val factory = ResolvingDataSource.Factory(DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(false)) { spec ->
             if (spec.uri.scheme != "pocketclassic") throw IOException("不支持此音频来源")
             val id = spec.uri.lastPathSegment?.toLongOrNull() ?: throw IOException("无效歌曲")
-            val config = store.read() ?: throw IOException("请先连接音乐服务")
-            val resource = GatewayApi(config).resolve(id)
+            val resource = api.resolve(id)
             spec.withUri(Uri.parse(resource.url))
         }
         val player = ExoPlayer.Builder(this).setMediaSourceFactory(DefaultMediaSourceFactory(factory)).build().apply {
@@ -92,7 +92,7 @@ class PlaybackService : MediaSessionService() {
             try {
                 var fresh = emptyList<MusicTrack>()
                 for (attempt in 0 until 3) {
-                    val batch = withContext(Dispatchers.IO) { GatewayApi(config).roaming() }
+                    val batch = withContext(Dispatchers.IO) { api.roaming() }
                     if (!radio.current(ticket) || player.currentMediaItem?.mediaMetadata?.extras?.getString("queueSession") != key || store.read() != config) return@launch
                     fresh = radio.accept(ticket, batch)
                     if (fresh.isNotEmpty() || batch.isEmpty()) break

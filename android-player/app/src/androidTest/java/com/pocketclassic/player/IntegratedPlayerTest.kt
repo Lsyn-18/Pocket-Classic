@@ -91,9 +91,8 @@ class IntegratedPlayerTest {
     @Test fun packagedInterfacePlaybackAndBackgroundRadio() {
         val context=instrumentation.targetContext; val args=InstrumentationRegistry.getArguments()
         instrumentation.uiAutomation.executeShellCommand("wm dismiss-keyguard").use { descriptor -> FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } }
-        val service=args.getString("serviceUrl");val code=args.getString("pairCode")
-        step("Pairing with the local test service")
-        if(service!=null&&code!=null)ConnectionStore(context).save(GatewayApi.pair(service,code))
+        val authenticated=args.getString("authenticated")=="true"
+        step("Using the on-device NetEase session, without a desktop gateway")
         step("Launching the packaged player")
         scenario=ActivityScenario.launch(MainActivity::class.java)
         try {
@@ -115,7 +114,7 @@ class IntegratedPlayerTest {
             assertTrue(js("JSON.stringify(window.PocketClassicContext.entries())").contains("私人漫游"))
             turnOneStep();ready("window.PocketClassicContext.state.selected===1")
             step("Native touch and wheel navigation passed")
-            if(service==null||code==null)return
+            if(!authenticated)return
             ready("window.PocketClassicContext.state.connected")
             tap("中央选择键");ready("window.PocketClassicContext.state.page==='tracks'&&!window.PocketClassicContext.state.busy&&window.PocketClassicContext.state.tracks.length>0")
             tap("中央选择键");ready("window.PocketClassicContext.state.queueMode==='daily'&&window.PocketClassicContext.audio.readyState===4&&!window.PocketClassicContext.audio.paused",45)

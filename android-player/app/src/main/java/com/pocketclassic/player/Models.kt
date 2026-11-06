@@ -5,8 +5,6 @@ import org.json.JSONObject
 
 data class MusicPlaylist(val id: Long, val name: String, val trackCount: Int)
 data class MusicTrack(val id: Long, val name: String, val artist: String, val durationMs: Long, val fee: Int = 0)
-data class ConnectionConfig(val baseUrl: String, val token: String)
-data class AccountInfo(val authenticated: Boolean, val nickname: String, val message: String)
 data class PlayResource(val url: String, val trial: Boolean, val durationMs: Long)
 enum class Page { HOME, PLAYLISTS, TRACKS, NOW_PLAYING, SETTINGS }
 enum class DialMode { VOLUME, SEEK }

@@ -1,6 +1,9 @@
 package com.pocketclassic.player
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.os.SystemClock
 import android.content.ComponentName
 import android.os.Bundle
 import androidx.compose.runtime.getValue
@@ -20,6 +23,7 @@ import androidx.media3.session.SessionToken
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -27,19 +31,26 @@ import org.json.JSONObject
 import java.io.IOException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
 
 data class ClassicState(
     val connected: Boolean = false, val nickname: String = "", val busy: Boolean = false,
-    val message: String = "", val showConnection: Boolean = false, val endpoint: String = ""
+    val message: String = "", val showConnection: Boolean = false, val qrImage: Bitmap? = null,
+    val loginUrl: String = "", val loginPhase: String = "idle"
 )
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
-    private val store = ConnectionStore(application)
-    var state by mutableStateOf(ClassicState(endpoint = store.read()?.baseUrl ?: ""))
+    private val store = MusicSessionStore(application)
+    private val api = NetEaseApi(store)
+    private var loginJob: Job? = null
+    private var loginGeneration = 0L
+    var state by mutableStateOf(ClassicState())
         private set
     private var controller: MediaController? = null
     private var loading: Job? = null
+    private var loadGeneration = 0L
     private var connectionGeneration = 0L
     var queueRevision = 0L
         private set
@@ -61,38 +72,69 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
     private fun load(block: suspend () -> Unit) {
         loading?.cancel()
+        val generation=++loadGeneration
         loading = viewModelScope.launch {
             state = state.copy(busy = true, message = "")
             try { block() } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { state = state.copy(message = e.message?.take(140) ?: "连接失败，请检查电脑服务") }
-            finally { state = state.copy(busy = false) }
+            catch (e: Exception) { if(generation==loadGeneration)state = state.copy(message = e.message?.take(140) ?: "连接失败，请检查手机网络") }
+            finally { if(generation==loadGeneration)state = state.copy(busy = false) }
         }
     }
     fun refreshAccount() = load {
-        val config = store.read() ?: return@load
-        val account = withContext(Dispatchers.IO) { GatewayApi(config).account() }
-        state = state.copy(connected = account.authenticated, nickname = account.nickname,
-            message = if (account.authenticated) "" else "请先在电脑端扫码登录网易云音乐")
+        val account = withContext(Dispatchers.IO) { api.status() }
+        state = state.copy(connected = account.optBoolean("authenticated"), nickname = account.optString("nickname"),message = account.optString("message"))
     }
-    fun pair(url: String, code: String) = load {
-        val config = withContext(Dispatchers.IO) { GatewayApi.pair(url, code) }
-        connectionGeneration++; controller?.stop(); controller?.clearMediaItems(); store.save(config)
-        val account = withContext(Dispatchers.IO) { GatewayApi(config).account() }
-        state = state.copy(connected = account.authenticated, nickname = account.nickname, endpoint = config.baseUrl,
-            showConnection = !account.authenticated, message = if (account.authenticated) "连接成功" else "配对成功，请先在电脑端扫码登录")
+    fun beginLogin() {
+        loadGeneration++;loading?.cancel()
+        loginJob?.cancel(); val generation=++loginGeneration
+        state=state.copy(showConnection=true,busy=true,qrImage=null,loginUrl="",loginPhase="creating",message="正在向网易云申请登录授权…")
+        loginJob=viewModelScope.launch {
+            try {
+                val ticket=withContext(Dispatchers.IO) { api.beginLogin() }
+                val image=withContext(Dispatchers.Default) {
+                    val matrix=QRCodeWriter().encode(ticket.url,BarcodeFormat.QR_CODE,440,440)
+                    Bitmap.createBitmap(440,440,Bitmap.Config.ARGB_8888).apply { setPixels(IntArray(440*440) { if(matrix[it%440,it/440])Color.BLACK else Color.WHITE },0,440,0,0,440,440) }
+                }
+                if(generation!=loginGeneration)return@launch
+                state=state.copy(busy=false,qrImage=image,loginUrl=ticket.url,loginPhase="waiting",message="请在网易云音乐中确认授权，完成后返回这里")
+                val deadline=SystemClock.elapsedRealtime()+180_000
+                while(generation==loginGeneration && SystemClock.elapsedRealtime()<deadline) {
+                    delay(2300)
+                    val result=withContext(Dispatchers.IO) { api.pollLogin(ticket) }
+                    if(generation!=loginGeneration)return@launch
+                    when(result.code) {
+                        803 -> {
+                            val session=result.session?:throw IOException("未能确认登录，请重试")
+                            if(generation!=loginGeneration)return@launch
+                            store.save(session)
+                            connectionGeneration++;controller?.stop();controller?.clearMediaItems()
+                            state=state.copy(connected=true,nickname=session.nickname,busy=false,showConnection=false,qrImage=null,loginUrl="",loginPhase="authorized",message="网易云已登录，手机可独立播放")
+                            return@launch
+                        }
+                        800 -> break
+                        802 -> state=state.copy(loginPhase="confirm",message="请在网易云音乐中确认登录")
+                        801 -> Unit
+                        else -> throw IOException("网易云授权暂不可用，请重新生成二维码")
+                    }
+                }
+                state=state.copy(qrImage=null,loginUrl="",loginPhase="expired",message="授权已过期，请重新生成")
+            } catch(e: CancellationException) { throw e }
+            catch(e: Exception) { if(generation==loginGeneration)state=state.copy(busy=false,loginPhase="error",message=e.message?.take(140)?:"登录失败，请检查手机网络") }
+        }
     }
-    fun showConnection(show: Boolean = true) { state = state.copy(showConnection = show, message = "") }
+    fun showConnection(show: Boolean = true) {
+        state=state.copy(showConnection=show)
+        if(!show) { loginGeneration++;loginJob?.cancel();state=state.copy(qrImage=null,loginUrl="",busy=false) }
+        else if(!state.connected && !loginJob.let { it?.isActive==true })beginLogin()
+    }
     fun disconnect() {
-        connectionGeneration++; loading?.cancel(); controller?.stop(); controller?.clearMediaItems(); store.clear()
-        state = ClassicState(message = "已断开音乐服务")
+        connectionGeneration++;loginGeneration++;loadGeneration++;loginJob?.cancel();loading?.cancel(); controller?.stop(); controller?.clearMediaItems(); store.clear()
+        state = ClassicState(message = "已退出网易云音乐")
     }
     suspend fun browserApi(route: String): JSONObject {
         if (!NativeContract.allowedApi(route)) throw IOException("不支持此音乐操作")
-        val config = store.read()
-        if (config == null && route == "status") return JSONObject().put("authenticated", false).put("nickname", "").put("message", "请先配对电脑上的音乐服务")
-        if (config == null) throw IOException("请先连接音乐服务")
         val generation = connectionGeneration
-        val result = withContext(Dispatchers.IO) { GatewayApi(config).browserApi(route) }
+        val result = withContext(Dispatchers.IO) { api.browserApi(route) }
         if (generation != connectionGeneration) throw IOException("连接已变化，请重新打开音乐菜单")
         return result
     }
@@ -101,7 +143,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         require(tracks.length() in 1..5000) { "播放列表过长或为空" }
         val index = data.getInt("index"); require(index in 0 until tracks.length())
         val mode = data.optString("mode", "playlist"); require(NativeContract.validMode(mode))
-        require(store.read() != null) { "请先连接音乐服务" }
+        require(store.read() != null) { "请先登录网易云音乐" }
         val session = UUID.randomUUID().toString()
         val items = List(tracks.length()) {
             val track = trackFromJson(tracks.getJSONObject(it))

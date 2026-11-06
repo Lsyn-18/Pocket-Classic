@@ -4,35 +4,31 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.content.Intent
+import android.graphics.Bitmap
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.activity.ComponentActivity
 import androidx.activity.addCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
@@ -48,6 +44,27 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private lateinit var playerHost: NativePlayerHost
+    private var pendingQr: Bitmap? = null
+    private var pendingOpenScanner = false
+    private val imagePermission=registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val image=pendingQr;val open=pendingOpenScanner;pendingQr=null;pendingOpenScanner=false
+        if(granted&&image!=null)saveLoginQr(image,open)
+        else Toast.makeText(this,"未获得相册保存权限，可直接扫描屏幕上的二维码",Toast.LENGTH_LONG).show()
+    }
+    private fun saveLoginQr(image: Bitmap?,openScanner: Boolean=false) {
+        if(image==null)return
+        if(Build.VERSION.SDK_INT<29&&ContextCompat.checkSelfPermission(this,Manifest.permission.WRITE_EXTERNAL_STORAGE)!=PackageManager.PERMISSION_GRANTED) {
+            pendingQr=image;pendingOpenScanner=openScanner;imagePermission.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE);return
+        }
+        lifecycleScope.launch {
+            try { withContext(Dispatchers.IO) { LoginQrImage.save(this@MainActivity,image) };if(openScanner)openNetEaseScanner();Toast.makeText(this@MainActivity,"二维码已保存，请在网易云扫一扫中从相册选择",Toast.LENGTH_LONG).show() }
+            catch(e: Exception) { Toast.makeText(this@MainActivity,e.message?:"二维码保存失败",Toast.LENGTH_LONG).show() }
+        }
+    }
+    private fun openNetEaseScanner() {
+        try { startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("orpheus://nm/base/scan")).setPackage("com.netease.cloudmusic")) }
+        catch(_: android.content.ActivityNotFoundException) { Toast.makeText(this,"请先安装网易云音乐，或使用另一台设备扫码授权",Toast.LENGTH_LONG).show() }
+    }
     private var askedNotifications = false
     private fun notificationPermission() {
         if (!askedNotifications && Build.VERSION.SDK_INT >= 33 &&
@@ -71,32 +88,12 @@ class MainActivity : ComponentActivity() {
                 Box(Modifier.fillMaxSize().background(Color(0xFFF7F9FC)).safeDrawingPadding()) {
                     AndroidView(factory = { playerHost.webView }, modifier = Modifier.fillMaxSize())
                 }
-                if (state.showConnection) {
-                    var url by remember { mutableStateOf(state.endpoint) }
-                    var code by remember { mutableStateOf("") }
-                    AlertDialog(
-                        onDismissRequest = { vm.showConnection(false) },
-                        title = { Text("连接网易云音乐") },
-                        text = { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("电脑与手机连接同一 Wi-Fi。在电脑上扫码登录，再到手机配对页查看服务地址和 6 位配对码。", fontSize = 13.sp, lineHeight = 20.sp)
-                            OutlinedTextField(value = url, onValueChange = { url = it }, label = { Text("服务地址") },
-                                placeholder = { Text("http://192.168.1.10:17864") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), singleLine = true)
-                            OutlinedTextField(value = code, onValueChange = { code = it.filter(Char::isDigit).take(6) }, label = { Text("6 位配对码") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true)
-                            if (state.connected) Text("已连接：" + state.nickname, fontSize = 13.sp)
-                            if (state.message.isNotBlank()) Text(state.message, color = Color(0xFF995224), fontSize = 12.sp)
-                            if (state.busy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                        } },
-                        confirmButton = { TextButton(enabled = !state.busy && code.length == 6 && url.isNotBlank(), onClick = { vm.pair(url, code) }) { Text("配对连接") } },
-                        dismissButton = { Row {
-                            if (state.endpoint.isNotBlank()) TextButton(onClick = { vm.disconnect() }) { Text("断开") }
-                            TextButton(onClick = { vm.showConnection(false) }) { Text("完成") }
-                        } }
-                    )
-                }
+                if (state.showConnection) NetEaseLoginDialog(state,
+                    close={vm.showConnection(false)},refresh={vm.beginLogin()},logout={vm.disconnect()},
+                    save={saveLoginQr(vm.state.qrImage)},open={saveLoginQr(vm.state.qrImage,true)})
                 if (error.isNotBlank()) AlertDialog(onDismissRequest = { error = "" }, title = { Text("界面加载提示") },
                     text = { Text(error) }, confirmButton = { TextButton(onClick = { finish() }) { Text("关闭后重新打开") } })
-                LaunchedEffect(state.connected, state.endpoint) { playerHost.connectionChanged() }
+                LaunchedEffect(state.connected, state.nickname) { playerHost.connectionChanged() }
             }
         }
         lifecycleScope.launch {
