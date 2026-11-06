@@ -85,10 +85,11 @@ export function createClassic(screenTexture) {
     glass: new THREE.MeshPhysicalMaterial({ color: '#ffffff', metalness: 1, roughness: .035, transparent:true, opacity:.045, depthWrite:false, clearcoat: .1 }),
     gold: new THREE.MeshStandardMaterial({ color: '#b5a66c', roughness: .45, metalness: .9 }),
   };
-  // A finer polish on the rolled aluminum edge catches narrow studio highlights.
+  // A soft satin edge keeps the slim rolled lip from reading as a dark sidewall.
   // The white click wheel stays matte so the two materials read separately.
   materials.frontRim = materials.front.clone();
-  materials.frontRim.roughness = .23;
+  materials.frontRim.roughness = .36;
+  materials.frontRim.metalness = .68;
   materials.frontRim.anisotropy = .16;
   const parts = {};
   function add(name, geometry, material, position = [0, 0, 0], zone = null) {
@@ -119,7 +120,7 @@ export function createClassic(screenTexture) {
   }
   solid('Polished_stainless_rear_shell', 6.18, 10.35, .57, .72, .13, materials.steel, [0,0,-.165], 'case');
   // Both holes are real openings in the front face geometry.
-  const face = roundedShape(5.78, 9.95, .35);
+  const face = roundedShape(5.98, 10.15, .45);
   const screenHole = roundedShape(5.31, 4.025, .10, 0, dimensions.screenY);
   face.holes.push(new THREE.Path(screenHole.getPoints(100).reverse()));
   const dialHole = new THREE.Path(); dialHole.absarc(0, dimensions.wheelY, 1.945, 0, Math.PI * 2, false); face.holes.push(dialHole);
@@ -127,7 +128,7 @@ export function createClassic(screenTexture) {
   for(let i=0;i<facePositions.count;i++)faceUv.push((facePositions.getX(i)+3.09)/6.18,(facePositions.getY(i)+5.175)/10.35);
   faceGeometry.setAttribute('uv',new THREE.Float32BufferAttribute(faceUv,2));
   add('Flat_anodized_face_with_cutouts', faceGeometry, materials.front, [0,0,.503], 'case');
-  // The actual Classic front rolls into its edge over a broad rounded lip.
+  // Keep the visible front roll narrow: a broad dark rim exaggerates thickness.
   // Construct that surface separately so the display and wheel openings keep
   // their tight, machined edges rather than acquiring the outer bevel radius.
   const rimVertices=[],rimIndices=[];const around=128,steps=16;
@@ -137,7 +138,7 @@ export function createClassic(screenTexture) {
     for(let corner=0;corner<4;corner++)for(let k=0;k<32;k++){const a=(corner*90+k*90/32)*Math.PI/180;points.push([centers[corner][0]+r*Math.cos(a),centers[corner][1]+r*Math.sin(a)])}
     return points;
   }
-  for(let j=0;j<=steps;j++){const a=j/steps*Math.PI/2,inset=.2*(1-Math.sin(a)),z=.2+.325*Math.cos(a);for(const p of perimeter(inset))rimVertices.push(p[0],p[1],z)}
+  for(let j=0;j<=steps;j++){const a=j/steps*Math.PI/2,inset=.1*(1-Math.sin(a)),z=.2+.325*Math.cos(a);for(const p of perimeter(inset))rimVertices.push(p[0],p[1],z)}
   for(let j=0;j<steps;j++)for(let i=0;i<around;i++){const a=j*around+i,b=j*around+(i+1)%around,c=(j+1)*around+i,d=(j+1)*around+(i+1)%around;rimIndices.push(a,c,b,b,c,d)}
   const rimGeometry=new THREE.BufferGeometry();rimGeometry.setAttribute('position',new THREE.Float32BufferAttribute(rimVertices,3));rimGeometry.setIndex(rimIndices);rimGeometry.computeVertexNormals();
   const rimUv=[];for(let i=0;i<rimVertices.length;i+=3)rimUv.push((rimVertices[i]+3.09)/6.18,(rimVertices[i+1]+5.175)/10.35);rimGeometry.setAttribute('uv',new THREE.Float32BufferAttribute(rimUv,2));
@@ -175,7 +176,7 @@ export function createClassic(screenTexture) {
   let dark = false;
   function setDark(value) {
     if (dark === value) return; dark = value;
-    for(const [material,silverRoughness] of [[materials.front,.30],[materials.frontRim,.23]]){
+    for(const [material,silverRoughness] of [[materials.front,.30],[materials.frontRim,.36]]){
       material.map=value?null:silverCoat;material.color.set(value?'#30343a':'#ffffff');material.roughness=value?.40:silverRoughness;material.needsUpdate=true;
     }
     materials.wheel.color.set(value?'#20242b':'#eff3f5'); materials.center.color.set(value?'#343b45':'#a5a6a9');
