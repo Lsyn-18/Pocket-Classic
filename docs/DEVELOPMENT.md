@@ -84,6 +84,7 @@ npm run build
 - `artwork.mjs`：封面来源检查、加载缓存与异步结果隔离。
 - `geometry.mjs`：机身、转轮、屏幕和材质。
 - `screen.mjs`：将实时菜单和播放状态绘制到屏幕纹理。
+- `battery.mjs`：绘制细灰银边框、绿色电芯、低电量配色及充电闪电，继续使用真实设备电量。
 - `studio-floor.mjs`：三维镜像倒影、距离渐隐和柔和接触阴影。
 - `motion.mjs`：姿态授权、自然姿势校准、死区、平滑与限幅。
 - `front-view.mjs`：相机自适应、射线点击、转轮手势与辅助工具。

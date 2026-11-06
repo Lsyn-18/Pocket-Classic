@@ -38,6 +38,11 @@ body{background:radial-gradient(ellipse at 50% 24%,#ffffff 0%,#f6f8fb 52%,#eaf0f
   .compact-player .dialog{max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;padding:22px}
 
 .native-app .layout{height:100%}
+.battery{width:26px;height:11px;border:.85px solid #697780;border-radius:2px;padding:1px;background:#e1e6e9;box-shadow:inset 0 0 0 .5px #fff}
+.battery:after{right:-3px;top:2.25px;width:1.75px;height:4.5px;border-radius:.7px;background:#77828c}
+.battery i{width:0;background:linear-gradient(#bbda85,#91ba58 46%,#7fa349 52%,#8bb553);border-radius:.7px}
+.battery.low i{background:linear-gradient(#eda18a,#d77a65 46%,#c36655 52%,#c46d5d)}
+.battery.charging:before{content:'';position:absolute;z-index:1;left:10px;top:1px;width:7px;height:8px;background:#f9ffe9;clip-path:polygon(70% 0,5% 57%,43% 57%,25% 100%,95% 38%,57% 38%);filter:drop-shadow(0 0 .4px #587634)}
 .album.has-cover:before,.album.has-cover:after{display:none}.album>img{display:block;width:100%;height:100%;object-fit:cover}
   .compact-player.landscape-player #modelViewport{inset:max(6px,env(safe-area-inset-top)) calc(76px + env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left))}
   .compact-player.landscape-player .player-tools{left:auto;right:calc(10px + env(safe-area-inset-right));top:50%;bottom:auto;transform:translateY(-50%);flex-direction:column;justify-content:center;gap:6px;width:54px;max-width:none;height:auto;padding:7px 3px;border-radius:27px}

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {createArtworkStore} from './artwork.mjs';
+import {drawBattery} from './battery.mjs';
 
 export function makeScreen(app) {
   const canvas = document.createElement('canvas'); canvas.width=640; canvas.height=480;
@@ -33,10 +34,7 @@ export function makeScreen(app) {
     text(s.title,7,12,230,'bold 14px Arial');
     if(s.hold)text('HOLD',242,12,29,'8px Arial','#6a7584');
     if(a&&!a.paused&&!neutral){c.fillStyle='#3e84bd';c.beginPath();c.moveTo(270,7);c.lineTo(278,12);c.lineTo(270,17);c.closePath();c.fill()}
-    const level=Number.isFinite(s.battery?.level)?Math.max(0,Math.min(1,s.battery.level)):null;
-    c.strokeStyle='#728671';c.lineWidth=1;c.strokeRect(287,7,24,10);c.fillStyle=level!==null&&level<=.15?'#ce695c':'#8db080';c.fillRect(289,9,20*(level??0),6);c.fillStyle='#728671';c.fillRect(312,10,2,4);
-    if(level===null)text('?',295,12,8,'8px Arial','#728671');
-    if(s.battery?.charging){c.fillStyle='#355b37';c.beginPath();c.moveTo(300,7);c.lineTo(295,12);c.lineTo(299,12);c.lineTo(297,17);c.lineTo(304,10);c.lineTo(300,10);c.closePath();c.fill();}
+    drawBattery(c,s.battery);
     if(s.page==='playing'&&s.current){
       const t=s.current;album(12,40,95,t);text(t.name,120,57,188,'bold 15px Arial');text(t.artist,120,82,188,'12px Arial','#687b8e');text(t.album||(s.queueMode==='roam'?'私人 FM · 连续推荐':`${s.queueIndex+1} / ${s.queue.length}`),120,109,180,'10px Arial','#8593a3');
       const duration=Number.isFinite(a.duration)?a.duration:t.durationMs/1000;const progress=(a.currentTime||0)/Math.max(1,duration);
