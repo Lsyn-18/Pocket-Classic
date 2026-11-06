@@ -65,6 +65,19 @@ class PhysicalDeviceSmokeTest {
         }
     }
     private fun tap(label: String) { val r = rectangle(label); touch(listOf(Pair(r.getDouble("x") + r.getDouble("width") / 2, r.getDouble("y") + r.getDouble("height") / 2))) }
+    @Test fun nativeSensorSamplesAndCalibration() {
+        assumeTrue("Explicit sensor check required", InstrumentationRegistry.getArguments().getString("motionTest") == "true")
+        scenario = ActivityScenario.launch(MainActivity::class.java)
+        try {
+            waitFor("!!window.PocketClassicContext&&document.body.classList.contains('three-ready')",45)
+            js("window.motionSampleCount=0;window.stopMotionSamples=window.PocketClassicContext.native.motion.subscribe(()=>window.motionSampleCount++);document.getElementById('motionToggle').click()")
+            waitFor("window.motionSampleCount>=8&&document.getElementById('modelViewport').dataset.motion==='active'",20)
+            step("Native sensor samples received and natural-hold calibration became active")
+        } finally {
+            js("if(document.getElementById('motionToggle').getAttribute('aria-pressed')==='true')document.getElementById('motionToggle').click();window.stopMotionSamples?.()")
+            scenario.close()
+        }
+    }
     @Test fun renderTouchBatteryMotionAndRotation() {
         assumeTrue("Explicit physical-device run required", InstrumentationRegistry.getArguments().getString("physicalDevice") == "true")
         val context = instrumentation.targetContext

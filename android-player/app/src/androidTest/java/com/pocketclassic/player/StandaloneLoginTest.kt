@@ -19,6 +19,16 @@ import java.io.File
 @RunWith(AndroidJUnit4::class)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class StandaloneLoginTest {
+    @Test fun verifyExistingAccountAndPlaylists() {
+        org.junit.Assume.assumeTrue("Requires the user's existing device login", InstrumentationRegistry.getArguments().getString("existingSession") == "true")
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val api = NetEaseApi(MusicSessionStore(instrumentation.targetContext))
+        assertTrue(api.status().getBoolean("authenticated"))
+        val playlists = api.browserApi("playlists").getJSONArray("playlists")
+        assertTrue("No playlists returned", playlists.length() > 0)
+        val tracks = api.browserApi("tracks?id=" + playlists.getJSONObject(0).getLong("id")).getJSONArray("tracks")
+        instrumentation.sendStatus(2, Bundle().apply { putString("stream", "\nEXISTING_DEVICE_ACCOUNT_AND_PLAYLISTS_PASSED count=${playlists.length()}, firstPlaylistTracks=${tracks.length()}\n") })
+    }
     @Test fun authorizeOnDeviceAndReadAccountDirectly() {
         val instrumentation=InstrumentationRegistry.getInstrumentation();val context=instrumentation.targetContext
         org.junit.Assume.assumeTrue("Requires a fresh user authorization",InstrumentationRegistry.getArguments().getString("authorize")=="true")

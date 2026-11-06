@@ -1,7 +1,6 @@
 package com.pocketclassic.player
 
 import android.content.ComponentName
-import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.os.SystemClock
@@ -122,6 +121,7 @@ class IntegratedPlayerTest {
                 } finally { instrumentation.uiAutomation.executeShellCommand("cmd battery reset").use { descriptor -> FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } } }
             }
             assertEquals("true",js("document.documentElement.clientWidth===document.documentElement.scrollWidth&&document.documentElement.clientHeight===document.documentElement.scrollHeight"))
+            js("window.PocketClassicContext.action('menu',true)");ready("window.PocketClassicContext.state.page==='home'")
             tap("中央选择键");ready("window.PocketClassicContext.state.page==='music'")
             assertTrue(js("JSON.stringify(window.PocketClassicContext.entries())").contains("每日推荐"))
             assertTrue(js("JSON.stringify(window.PocketClassicContext.entries())").contains("私人漫游"))
@@ -160,7 +160,9 @@ class IntegratedPlayerTest {
             }
             waitFor("Radio did not refill in the background",45) { val count=AtomicReference(0);instrumentation.runOnMainSync { count.set(controller.mediaItemCount) };count.get()>filledCount }
             step("Native playback advanced and refilled again while the WebView was stopped")
-            context.startActivity(Intent(context,MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            // Returning via the launcher models a user opening the app. A background
+            // context.startActivity is correctly blocked by some HyperOS versions.
+            instrumentation.uiAutomation.executeShellCommand("am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10000000 -n com.pocketclassic.player/.MainActivity").use { descriptor -> FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } }
             waitFor("Activity did not resume") { val resumed=AtomicReference(false);instrumentation.runOnMainSync { resumed.set(ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).any { it is MainActivity }) };resumed.get() }
             ready("window.PocketClassicContext.state.queueIndex>="+targetIndex+"&&window.PocketClassicContext.audio.readyState===4")
             tap("播放暂停，长按休眠");ready("window.PocketClassicContext.audio.paused")

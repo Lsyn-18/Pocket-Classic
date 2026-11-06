@@ -148,6 +148,10 @@ Android Studio 中配置 SDK 即可；命令行构建可以设置 `ANDROID_HOME`
 
 `PhysicalDeviceSmokeTest` 必须传入 `physicalDevice=true` 才运行，检查实际 WebView 画面、短时帧率、App 内触摸路径、真实电量、马达调用、体感启动及横竖屏布局；不改手机的系统电量、分辨率、锁屏和权限设置。部分 HyperOS 版本在仪器测试启动时仍停留原页面，需要从桌面打开播放器；命令行启动需保留 MAIN / LAUNCHER Intent，与测试启动方式匹配。完整账号和后台音乐测试另在用户授权后执行。
 
+`PhysicalDeviceSmokeTest#nativeSensorSamplesAndCalibration` 传入 `motionTest=true`，要求收到真实传感器样本且校准进入 active。`StandaloneLoginTest#verifyExistingAccountAndPlaylists` 传入 `existingSession=true`，使用手机已有授权验证账号和歌单，不重新生成二维码。播放集成测试在后台验证后通过桌面启动 Intent 返回 App，避免将 HyperOS 正常限制后台弹出界面误判为播放器故障。
+
+安卓 TICK 触感遵守系统的触感设置。小米真机曾在 `haptic_feedback_enabled=0` 时将请求记为 `ignored_for_settings`；用户开启系统触感后，同一应用请求记为 `finished`。诊断时应区分“已发送请求”“系统实际执行”“用户是否感到震动”，不通过修改震动用途规避用户的系统设置。
+
 0.2.0 曾在 Android 15 模拟器通过电脑网关完成完整播放联调；0.3.0 的独立登录与账号接口需要新的手机会话授权，验证状态须单独记录，不继承旧结果。真机体感与性能仍待验证。
 
 ## 保存与提交
