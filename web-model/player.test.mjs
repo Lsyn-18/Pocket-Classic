@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {createRoamStream} from './roam-stream.mjs';
-const source=fs.readFileSync(new URL('./player.mjs',import.meta.url),'utf8').replace(/^import[^\n]+\n/,'');
+const source=fs.readFileSync(new URL('./player.mjs',import.meta.url),'utf8').replace(/^import[^\n]+\n/gm,'');
 const song=id=>({id,name:'Track '+id,artist:'Artist',durationMs:120000});
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
 function fixture(routes={}){

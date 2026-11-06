@@ -34,4 +34,10 @@ if(process.argv.includes('--publish')){
   fs.mkdirSync(path.join(root,'outputs'),{recursive:true});
   fs.writeFileSync(path.join(root,'outputs/Pocket-Classic-3D.html'),offline);
 }
+if(process.argv.includes('--android')){
+  const assets=path.join(root,'android-player/app/src/main/assets');fs.mkdirSync(assets,{recursive:true});
+  const policy="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'";
+  const android=html.replace('<html lang="zh-CN">','<html lang="zh-CN" class="compact-player">').replace('<body>','<body class="compact-player native-app">').replace('<head>','<head><meta http-equiv="Content-Security-Policy" content="'+policy+'">');
+  fs.writeFileSync(path.join(assets,'player.html'),android);
+}
 console.log(JSON.stringify({built:true,published:process.argv.includes('--publish'),bundleBytes:js.length,htmlBytes:Buffer.byteLength(html)}));

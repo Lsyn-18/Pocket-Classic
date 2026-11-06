@@ -6,3 +6,4 @@
 *.jar binary
 # Preserve whitespace inside bundled third-party shader strings.
 music-service/index.html linguist-generated=true -whitespace
+android-player/app/src/main/assets/player.html linguist-generated=true -whitespace

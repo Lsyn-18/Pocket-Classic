@@ -4,7 +4,7 @@ const path = require('node:path');
 const os = require('node:os');
 const crypto = require('node:crypto');
 
-function createGateway({ upstream = 'http://127.0.0.1:17863', port = 17864, apkPath = path.resolve(__dirname, '../outputs/Pocket-Classic-0.1.0-debug.apk') } = {}) {
+function createGateway({ upstream = 'http://127.0.0.1:17863', port = 17864, apkPath = path.resolve(__dirname, '../outputs/Pocket-Classic-0.2.0-debug.apk') } = {}) {
   let code = String(crypto.randomInt(100000, 1000000));
   let expires = Date.now() + 10 * 60 * 1000;
   const sessions = new Set();
@@ -33,7 +33,7 @@ function createGateway({ upstream = 'http://127.0.0.1:17863', port = 17864, apkP
       if (url.pathname === '/' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'" }); return res.end(fs.readFileSync(path.join(__dirname, 'connect.html')));
       }
-      if (url.pathname === '/health' && req.method === 'GET') return json(res, { service: 'Pocket Classic', version: '0.1.0' }, 200, origin);
+      if (url.pathname === '/health' && req.method === 'GET') return json(res, { service: 'Pocket Classic', version: '0.2.0' }, 200, origin);
       if (url.pathname === '/setup' && req.method === 'GET') {
         if (!local(req.socket.remoteAddress)) return json(res, { error: '请在电脑本机打开连接页查看配对码' }, 403, origin);
         let account = { authenticated: false };
@@ -54,7 +54,7 @@ function createGateway({ upstream = 'http://127.0.0.1:17863', port = 17864, apkP
       if (url.pathname === '/download' && req.method === 'GET') {
         if (!local(req.socket.remoteAddress) && !safeEqual(url.searchParams.get('code') || '', currentCode())) return json(res, { error: '请在下载地址中填写当前配对码' }, 401, origin);
         if (!fs.existsSync(apkPath)) return json(res, { error: '安装包尚未生成' }, 404, origin);
-        res.writeHead(200, { 'Content-Type': 'application/vnd.android.package-archive', 'Content-Length': fs.statSync(apkPath).size, 'Content-Disposition': 'attachment; filename="Pocket-Classic-0.1.0-debug.apk"', 'Cache-Control': 'no-store' }); return fs.createReadStream(apkPath).pipe(res);
+        res.writeHead(200, { 'Content-Type': 'application/vnd.android.package-archive', 'Content-Length': fs.statSync(apkPath).size, 'Content-Disposition': 'attachment; filename="Pocket-Classic-0.2.0-debug.apk"', 'Cache-Control': 'no-store' }); return fs.createReadStream(apkPath).pipe(res);
       }
       if (!paths.has(url.pathname) || req.method !== paths.get(url.pathname)) return json(res, { error: '没有此接口' }, 404, origin);
       const token = String(req.headers.authorization || '').replace(/^Bearer /, '');

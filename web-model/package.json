@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": { "build": "node build.mjs", "test": "node --test motion.test.mjs roam-stream.test.mjs player.test.mjs" },
+  "scripts": { "build": "node build.mjs", "build:android": "node build.mjs --android", "test": "node --test motion.test.mjs roam-stream.test.mjs player.test.mjs native-platform.test.mjs" },
   "dependencies": { "three": "0.182.0" },
   "devDependencies": { "esbuild": "0.25.12" }
 }

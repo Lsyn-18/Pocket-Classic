@@ -49,54 +49,55 @@ export class QuietTilt {
   }
 }
 
-export function createMotionControl({win = window, doc = document, onChange = () => {}} = {}) {
+export function createMotionControl({win = window, doc = document, source = null, onChange = () => {}} = {}) {
   const tilt = new QuietTilt();
-  let enabled = false, pending = false, phase = 'off', generation = 0, watchdog, listening = false;
+  let enabled = false, pending = false, phase = 'off', generation = 0, watchdog, listening = false, unsubscribe, suspended=false;
   const messages = {
     off: '沿转轮画圈浏览 · 可开启低灵敏体感', permission: '请允许读取手机姿态',
     calibrating: '保持自然拿握，稍停片刻完成校准', active: '轻轻倾斜手机 · 低灵敏，最大偏转 2.2°',
     paused: '体感已暂停，返回后自动校准', insecure: '手机体感需要 HTTPS 安全页面',
-    unsupported: '当前浏览器不支持体感，仍可操作转轮', denied: '体感未获授权，可在浏览器设置中允许后重试',
-    unavailable: '未收到手机姿态，请用支持体感的手机浏览器重试'
+    unsupported: source?'当前手机没有可用的姿态传感器':'当前浏览器不支持体感，仍可操作转轮', denied: '体感未获授权，可在浏览器设置中允许后重试',
+    unavailable: source?'未收到手机姿态，请重新开启体感':'未收到手机姿态，请用支持体感的手机浏览器重试'
   };
   const view = () => ({enabled, pending, phase, message: messages[phase]});
   const setPhase = next => { if (phase !== next) { phase = next; onChange(view()); } };
   const angle = () => Number.isFinite(win.screen?.orientation?.angle) ? win.screen.orientation.angle : Number.isFinite(win.orientation) ? win.orientation : 0;
   const receive = event => {
-    if (!enabled || doc.hidden) return;
-    if (!tilt.push(event.beta, event.gamma, angle(), win.performance.now())) return;
+    if (!enabled || doc.hidden || suspended) return;
+    if (!tilt.push(event.beta, event.gamma, Number.isFinite(event.angle)?event.angle:angle(), win.performance.now())) return;
     win.clearTimeout(watchdog);
     setPhase(tilt.base ? 'active' : 'calibrating');
   };
   const detach = () => {
-    win.removeEventListener('deviceorientation', receive); listening = false; win.clearTimeout(watchdog);
+    win.removeEventListener('deviceorientation', receive); unsubscribe?.();unsubscribe=null;listening = false; win.clearTimeout(watchdog);
   };
   const stop = (reason = 'off') => {
     generation++; enabled = false; pending = false; detach(); tilt.reset(); phase = reason; onChange(view());
   };
   const attach = () => {
     detach(); tilt.reset();
-    if (doc.hidden) { setPhase('paused'); return; }
-    win.addEventListener('deviceorientation', receive, {passive: true}); listening = true;
+    if (doc.hidden || suspended) { setPhase('paused'); return; }
+    if(source)unsubscribe=source.subscribe(receive);else win.addEventListener('deviceorientation', receive, {passive: true}); listening = true;
     setPhase('calibrating'); watchdog = win.setTimeout(() => stop('unavailable'), 6000);
   };
   const start = async () => {
     if (enabled || pending) return;
-    if (!win.isSecureContext) { stop('insecure'); return; }
-    if (!win.DeviceOrientationEvent) { stop('unsupported'); return; }
+    if (!source&&!win.isSecureContext) { stop('insecure'); return; }
+    if (!source&&!win.DeviceOrientationEvent) { stop('unsupported'); return; }
     const attempt = ++generation;
     pending = true; phase = 'permission'; onChange(view());
     try {
       // Called directly from the enable button, preserving user activation.
-      const permission = typeof win.DeviceOrientationEvent.requestPermission === 'function'
+      const permission = source ? await source.requestPermission() : typeof win.DeviceOrientationEvent.requestPermission === 'function'
         ? await win.DeviceOrientationEvent.requestPermission() : 'granted';
       if (attempt !== generation) return;
-      if (permission !== 'granted') { stop('denied'); return; }
+      if (permission !== 'granted') { stop(permission==='unsupported'?'unsupported':'denied'); return; }
       pending = false; enabled = true; attach();
     } catch { if (attempt === generation) stop('denied'); }
   };
   const recalibrate = () => { if (enabled) attach(); };
-  const visibility = () => { if (enabled) { if (doc.hidden) { detach(); tilt.reset(); setPhase('paused'); } else attach(); } };
+  const visibility = () => { if (enabled) { if (doc.hidden || suspended) { detach(); tilt.reset(); setPhase('paused'); } else attach(); } };
+  const stopVisibility=source?.onVisibility?.(visible=>{suspended=!visible;visibility();});
   const orientation = () => { if (enabled) attach(); };
   doc.addEventListener('visibilitychange', visibility);
   win.screen?.orientation?.addEventListener('change', orientation);
@@ -108,7 +109,7 @@ export function createMotionControl({win = window, doc = document, onChange = ()
       return tilt.step(dt, now, frozen);
     },
     destroy() {
-      stop(); doc.removeEventListener('visibilitychange', visibility);
+      stop(); stopVisibility?.();doc.removeEventListener('visibilitychange', visibility);
       win.screen?.orientation?.removeEventListener('change', orientation);
       win.removeEventListener('orientationchange', orientation);
     }

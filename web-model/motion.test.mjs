@@ -143,3 +143,15 @@ test('a stopped sensor stream eventually disables and recenters', async () => {
   e.control.tick(.016, 8000);
   assert.equal(e.control.state.phase, 'unavailable'); assert.equal(degrees(e.control.tick(.016, 8000)), 0);
 });
+test('native sensor source works without browser sensor APIs and recalibrates after backgrounding', async () => {
+  const e=environment({secure:false,supported:false});let receive,visibility,unsubscribed=0;
+  const control=createMotionControl({win:e.win,doc:e.doc,source:{
+    requestPermission:async()=> 'granted',
+    subscribe(fn){receive=fn;return()=>{receive=null;unsubscribed++;};},
+    onVisibility(fn){visibility=fn;return()=>{visibility=null;};}
+  }});
+  await control.start();assert.equal(control.state.phase,'calibrating');
+  for(let time=0;time<=600;time+=50){e.emit(0,0,time);receive({beta:45,gamma:5,angle:0});}
+  assert.equal(control.state.phase,'active');visibility(false);assert.equal(control.state.phase,'paused');assert.equal(receive,null);
+  visibility(true);assert.equal(control.state.phase,'calibrating');assert.ok(receive);control.destroy();assert.equal(visibility,null);assert.ok(unsubscribed>=2);
+});

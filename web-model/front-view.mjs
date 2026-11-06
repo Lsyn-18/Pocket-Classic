@@ -36,29 +36,34 @@ const studioCard=new THREE.RectAreaLight(0xffffff,6,4.5,8);studioCard.position.s
 const screen=makeScreen(app),classic=createClassic(screen.texture);scene.add(classic.model);
 const floor=createStudioFloor(classic.model,-D.height/2-.025);scene.add(floor.group);
 classic.model.rotation.set(-.008,-.025,0);
-let targetX=-.008,targetY=-.025,previous=performance.now(),gesture=null,holdTimer,seekTimer;
+let targetX=-.008,targetY=-.025,previous=performance.now(),gesture=null,holdTimer,seekTimer,renderedFrames=0;
 const compactQuery=matchMedia('(max-width:1000px)');
+const compact=()=>!!app.native||compactQuery.matches;
+// Embedded WebView can report its viewport before percentage heights settle.
+// Anchor the native root to the viewport and refresh it on rotation or resize.
+function nativeViewport(){if(!app.native)return;const height=document.documentElement.clientHeight;document.documentElement.style.height=height+'px';document.body.style.height=height+'px';document.querySelector('.layout').style.height=height+'px';}
+nativeViewport();window.addEventListener('resize',()=>{nativeViewport();measure();});
 const tools=document.getElementById('playerTools'),optionsToggle=document.getElementById('playerOptionsToggle');
 function closeOptions(){document.body.classList.remove('options-open');optionsToggle.setAttribute('aria-expanded','false')}
 optionsToggle.onclick=()=>{const open=document.body.classList.toggle('options-open');optionsToggle.setAttribute('aria-expanded',String(open))};
 document.addEventListener('pointerdown',e=>{if(!tools.contains(e.target))closeOptions()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('options-open')){e.stopImmediatePropagation();e.preventDefault();closeOptions();optionsToggle.focus()}},true);
 const fullscreenButton=document.getElementById('fullscreenToggle');
-fullscreenButton.hidden=!document.fullscreenEnabled;
+fullscreenButton.hidden=!!app.native||!document.fullscreenEnabled;
 fullscreenButton.onclick=async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else await document.documentElement.requestFullscreen();closeOptions()}catch{status.textContent='当前浏览器暂不支持全屏显示';host.dataset.notice='true';setTimeout(()=>{delete host.dataset.notice;status.textContent=motion.state.message},4000)}};
 document.addEventListener('fullscreenchange',()=>{fullscreenButton.textContent=document.fullscreenElement?'退出全屏':'全屏显示'});
-function adaptTools(){document.body.classList.toggle('compact-player',compactQuery.matches);document.getElementById(compactQuery.matches?'playerAccountSlot':'desktopAccountSlot').append(document.getElementById('account'));closeOptions()}
+function adaptTools(){document.body.classList.toggle('compact-player',compact());document.documentElement.classList.toggle('compact-player',compact());document.getElementById(compact()?'playerAccountSlot':'desktopAccountSlot').append(document.getElementById('account'));closeOptions()}
 compactQuery.addEventListener('change',()=>{adaptTools();measure()});adaptTools();
 const motionButton=document.getElementById('motionToggle'),calibrateButton=document.getElementById('motionCalibrate');
 function motionUI(view){motionButton.textContent=view.pending?'取消开启':view.enabled?'关闭体感':'开启体感';motionButton.setAttribute('aria-pressed',String(view.enabled));calibrateButton.hidden=!view.enabled;status.textContent=view.message;host.dataset.motion=view.phase;if(!view.enabled){targetX=-.008;targetY=-.025}}
-const motion=createMotionControl({onChange:motionUI});motionUI(motion.state);
+const motion=createMotionControl({source:app.native?.motion,onChange:motionUI});motionUI(motion.state);
 motionButton.onclick=()=>{if(motion.state.enabled||motion.state.pending)motion.stop();else motion.start()};
 calibrateButton.onclick=()=>motion.recalibrate();
 for(const button of tools.querySelectorAll('button'))button.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')e.stopPropagation()});
 window.addEventListener('pagehide',()=>motion.stop());
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 const pointer=new THREE.Vector2(),raycaster=new THREE.Raycaster();
-function measure(){const r=host.getBoundingClientRect();if(!r.width||!r.height)return;const aspect=r.width/r.height,height=compactQuery.matches?Math.max(11.38,6.34/aspect):Math.max(11.75,6.65/aspect);camera.left=-height*aspect/2;camera.right=height*aspect/2;camera.top=height/2-.28;camera.bottom=-height/2-.28;camera.updateProjectionMatrix();renderer.setSize(r.width,r.height,false);host.dataset.fit=compactQuery.matches?'screen':'studio'}
+function measure(){const root=document.documentElement;document.body.classList.toggle('landscape-player',root.clientWidth>root.clientHeight);const r=host.getBoundingClientRect();if(!r.width||!r.height)return;const aspect=r.width/r.height,height=compact()?Math.max(11.38,6.34/aspect):Math.max(11.75,6.65/aspect);camera.left=-height*aspect/2;camera.right=height*aspect/2;camera.top=height/2-.28;camera.bottom=-height/2-.28;camera.updateProjectionMatrix();renderer.setSize(r.width,r.height,false);host.dataset.fit=compact()?'screen':'studio'}
 new ResizeObserver(measure).observe(host);measure();
 function pick(e){const r=host.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);raycaster.setFromCamera(pointer,camera);
   for(const hit of raycaster.intersectObject(classic.model,true)){const p=classic.model.worldToLocal(hit.point.clone()),zone=hit.object.userData.zone;if(zone==='wheel'&&Math.hypot(p.x,p.y-D.wheelY)>1.945)continue;return {point:p,zone:zone||'case'}}return null}
@@ -97,6 +102,6 @@ function frame(now){const dt=Math.min(.05,(now-previous)/1000);previous=now;cons
   if(!gesture){classic.model.rotation.x+=(x-classic.model.rotation.x)*ease;classic.model.rotation.y+=(y-classic.model.rotation.y)*ease}
   classic.model.updateMatrixWorld(true);classic.setDark(app.state.dark);classic.setHold(app.state.hold);screen.draw();floor.update(app.state.dark);
   const r=host.getBoundingClientRect();for(const {button,point}of hitButtons){const p=classic.model.localToWorld(point.clone()).project(camera);button.style.transform=`translate(${(p.x*.5+.5)*r.width}px,${(-p.y*.5+.5)*r.height}px) translate(-50%,-50%)`}
-  host.dataset.tilt=`${classic.model.rotation.x.toFixed(4)},${classic.model.rotation.y.toFixed(4)}`;renderer.render(scene,camera);requestAnimationFrame(frame);
+  host.dataset.tilt=`${classic.model.rotation.x.toFixed(4)},${classic.model.rotation.y.toFixed(4)}`;renderer.render(scene,camera);host.dataset.frames=String(++renderedFrames);requestAnimationFrame(frame);
 }
 document.body.classList.add('three-ready');requestAnimationFrame(frame);

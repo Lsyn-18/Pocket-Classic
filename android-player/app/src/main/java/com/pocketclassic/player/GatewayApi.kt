@@ -45,6 +45,14 @@ class GatewayApi(private val config: ConnectionConfig) {
         } finally { connection.disconnect() }
     }
     fun account(): AccountInfo = request("/api/status").let { AccountInfo(it.optBoolean("authenticated"), it.optString("nickname"), it.optString("message")) }
+    fun browserApi(route: String): JSONObject {
+        if (!NativeContract.allowedApi(route)) throw IOException("不支持此音乐操作")
+        return request("/api/" + route)
+    }
+    fun roaming(): List<MusicTrack> {
+        val list = request("/api/roam").getJSONArray("tracks")
+        return List(list.length()) { trackFromJson(list.getJSONObject(it)) }.distinctBy { it.id }
+    }
     fun playlists(): List<MusicPlaylist> {
         val list = request("/api/playlists").getJSONArray("playlists")
         return List(list.length()) { i -> list.getJSONObject(i).let { MusicPlaylist(it.getLong("id"), it.getString("name"), it.optInt("trackCount")) } }

@@ -18,16 +18,19 @@
 ```mermaid
 flowchart LR
   Browser[浏览器播放器] -->|本机接口| Auth[会话服务 17863]
-  Android[Android 原型] -->|配对访问令牌| Gateway[手机网关 17864]
+  Android[Android Media3 服务] -->|配对访问令牌| Gateway[手机网关 17864]
+  WebView[安装包内的三维界面] -->|白名单消息桥| Android
   Gateway --> Auth
   Auth -->|内存中的登录会话| Netease[网易云音乐接口]
   Browser -->|账号获准的资源| CDN[网易云音频资源]
   Android -->|账号获准的资源| CDN
 ```
 
-浏览器在本机直接使用会话服务；Android 原型通过配对网关访问。网关不向客户端导出网易云登录 cookie，只转发允许的接口并清理凭证字段。会话服务仅监听本机地址，网关用于同一可信局域网内的手机连接。
+浏览器在本机直接使用会话服务；Android 通过配对网关访问。网关不向客户端导出网易云登录 cookie，只转发允许的接口并清理凭证字段。会话服务仅监听本机地址，网关用于同一可信局域网内的手机连接。
 
-当前并非脱离电脑独立运行的安卓应用。不要把已经在浏览器实现的功能误认为已集成到 APK。
+Android 0.2.0 将浏览器的三维界面打包为本地资源，共用菜单、转轮、材质、倒影和自适应逻辑。WebView 只加载固定的本地资源地址，禁止其他导航和网络资源；白名单消息桥把选歌、音量和姿态请求交给 Kotlin。配对凭证及音频资源地址不会进入 JavaScript。
+
+Media3 服务负责音频、通知栏、音频焦点及漫游队列续歌；界面停止后仍可播放。安卓原生旋转向量传感器输出 beta/gamma，再复用浏览器的校准、死区及平滑逻辑。当前仍需要电脑运行音乐服务。
 
 ## 运行服务
 
@@ -57,12 +60,13 @@ npm run build
 
 构建只生成 `dist/preview.html`。在项目根目录运行 `node web-model/preview-server.cjs`，即可在 `http://127.0.0.1:17866/` 检查页面；音乐接口转发到正在运行的 `17863` 服务。
 
-确认后运行 `npm run build -- --publish`，更新 `music-service/index.html` 以及 `outputs/Pocket-Classic-3D.html`。服务每次请求页面时读取当前文件，因此刷新浏览器即可看到更新。
+确认后运行 `npm run build -- --publish --android`，更新 `music-service/index.html`、`outputs/Pocket-Classic-3D.html` 以及 `android-player/app/src/main/assets/player.html`。服务每次请求页面时读取当前文件，因此刷新浏览器即可看到更新；安卓需要重新构建并安装 APK。
 
 关键文件：
 
 - `main.mjs`：浏览器入口，先加载播放器逻辑，再初始化三维界面。
 - `player.mjs`：菜单、账号、播放状态与队列切换。
+- `native-platform.mjs`：安卓消息桥、原生播放状态镜像和传感器生命周期。
 - `roam-stream.mjs`：漫游批次请求、最近歌曲去重和旧会话结果丢弃。
 - `geometry.mjs`：机身、转轮、屏幕和材质。
 - `screen.mjs`：将实时菜单和播放状态绘制到屏幕纹理。
@@ -103,10 +107,10 @@ npm run build
 在根目录运行所有服务端与浏览器逻辑检查：
 
 ```sh
-node --test music-service/discovery.test.cjs music-service/gateway.test.cjs web-model/motion.test.mjs web-model/roam-stream.test.mjs web-model/player.test.mjs
+node --test music-service/discovery.test.cjs music-service/gateway.test.cjs web-model/motion.test.mjs web-model/roam-stream.test.mjs web-model/player.test.mjs web-model/native-platform.test.mjs
 ```
 
-当前共 38 项，覆盖访问控制、凭证清理、推荐缓存、会话切换、漫游去重、并发续歌、过期响应隔离、播放流程和体感滤波。检查使用合成数据，不需要网易云账号；实际账号联调属于单独的手动验证。
+逻辑检查覆盖访问控制、凭证清理、推荐缓存、会话切换、漫游去重、并发续歌、过期响应隔离、原生消息桥、播放流程和体感滤波。检查使用合成数据，不需要网易云账号；实际账号联调单独验证。
 
 安卓检查：
 
@@ -117,8 +121,10 @@ cd android-player
 
 Android Studio 中配置 SDK 即可；命令行构建可以设置 `ANDROID_HOME`，或在被 Git 忽略的 `android-player/local.properties` 中填写本机 `sdk.dir`。不要上传该文件或调试签名密钥。
 
+安卓单元测试覆盖接口与资源白名单、旋转矩阵转换、漫游去重及旧会话隔离。`IntegratedPlayerTest` 是安装包内界面的设备测试，覆盖真实触摸、日推解码、漫游补歌、界面停止后的原生播放与跨批次补歌，以及横竖屏切换。它可通过 instrumentation 参数 `serviceUrl` 和 `pairCode` 连接本地已授权服务；配对码只在运行时提供，禁止写入源码或提交日志。模拟器通常使用 `http://10.0.2.2:17864`。设备测试需要联网，歌曲可用性取决于账号权限。本次已在 Android 15 模拟器通过完整联调；真机体感与性能仍待验证。
+
 ## 保存与提交
 
-`music-service/index.html` 作为可直接运行的预构建页面保留在仓库中。修改浏览器源码后，应重新运行发布构建并一起提交此页面。
+`music-service/index.html` 和安卓 `assets/player.html` 作为可直接运行的预构建页面保留在仓库中。修改共用界面后，应重新运行发布构建并一起提交这两个页面。
 
 `work/`、`outputs/`、`runtime/`、依赖、SDK、构建缓存、安装包和签名文件不提交。文档演示图应由不登录的中性界面生成，避免上传个人歌单、账号名称或登录二维码。
