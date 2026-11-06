@@ -110,7 +110,8 @@ class IntegratedPlayerTest {
             assertEquals("true",js("!!window.PocketClassicContext.native"))
             ready("Number.isFinite(window.PocketClassicContext.state.battery.level)")
             step("System battery available: " + js("JSON.stringify(window.PocketClassicContext.state.battery)"))
-            if (!authenticated) {
+            val emulator = android.os.Build.FINGERPRINT.startsWith("generic") || android.os.Build.MODEL.contains("sdk_gphone") || android.os.Build.MODEL.contains("Emulator")
+            if (!authenticated && emulator && args.getString("simulateBattery") == "true") {
                 try {
                     instrumentation.uiAutomation.executeShellCommand("cmd battery unplug").use { descriptor -> FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } }
                     instrumentation.uiAutomation.executeShellCommand("cmd battery set level 37").use { descriptor -> FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } }
@@ -131,6 +132,10 @@ class IntegratedPlayerTest {
             tap("中央选择键");ready("window.PocketClassicContext.state.page==='tracks'&&!window.PocketClassicContext.state.busy&&window.PocketClassicContext.state.tracks.length>0")
             tap("中央选择键");ready("window.PocketClassicContext.state.queueMode==='daily'&&window.PocketClassicContext.audio.readyState===4&&!window.PocketClassicContext.audio.paused",45)
             step("Daily recommendation decoded by the native player")
+            ready("!!window.PocketClassicContext.state.current.cover")
+            js("window.PocketClassicContext.native.artwork(window.PocketClassicContext.state.current.cover).then(source=>{const image=new Image();image.onload=()=>window.actualCoverDecoded=image.naturalWidth>0;image.onerror=()=>window.actualCoverDecoded=false;image.src=source}).catch(()=>window.actualCoverDecoded=false)")
+            ready("window.actualCoverDecoded===true",30)
+            step("Real album artwork downloaded natively and decoded in WebView")
             instrumentation.uiAutomation.takeScreenshot().also { bitmap -> File(context.filesDir,"pocketclassic-android.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) };bitmap.recycle() }
             tap("播放暂停，长按休眠");ready("window.PocketClassicContext.audio.paused")
             tap("MENU，长按返回主页");tap("MENU，长按返回主页");ready("window.PocketClassicContext.state.page==='music'")
