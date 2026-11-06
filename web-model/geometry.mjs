@@ -31,7 +31,7 @@ function aluminumColorTexture() {
   const w=512,h=1024,data=new Uint8Array(w*h*4);let seed=87;
   for(let y=0;y<h;y++)for(let x=0;x<w;x++){
     seed=(1664525*seed+1013904223)>>>0;
-    const v=y/(h-1),base=185+12*v+8*Math.sin(v*Math.PI),noise=((seed>>>24)/255-.5)*5;
+    const v=y/(h-1),base=190+10*v+6*Math.sin(v*Math.PI),noise=((seed>>>24)/255-.5)*2.5;
     const i=(y*w+x)*4;data[i]=data[i+1]=data[i+2]=base+noise;data[i+3]=255;
   }
   const texture=new THREE.DataTexture(data,w,h,THREE.RGBAFormat);texture.colorSpace=THREE.SRGBColorSpace;texture.needsUpdate=true;return texture;
@@ -76,15 +76,20 @@ export function createClassic(screenTexture) {
   const grain = grainTexture();
   const silverCoat=aluminumColorTexture();
   const materials = {
-    front: new THREE.MeshPhysicalMaterial({ color: '#ffffff', map:silverCoat, metalness: .72, roughness: .49, bumpMap: grain, bumpScale: .0013, clearcoat: .14, clearcoatRoughness: .32 }),
+    front: new THREE.MeshPhysicalMaterial({ color: '#ffffff', map:silverCoat, metalness: .88, roughness: .30, envMapIntensity: 1.12, anisotropy: .32, anisotropyRotation: Math.PI / 2, bumpMap: grain, bumpScale: .0008, clearcoat: .16, clearcoatRoughness: .24 }),
     steel: new THREE.MeshPhysicalMaterial({ color: '#dce0e5', metalness: 1, roughness: .145, clearcoat: .32, clearcoatRoughness: .12 }),
     wheel: new THREE.MeshStandardMaterial({ color: '#eff3f5', roughness: .68, metalness: .025 }),
-    center: new THREE.MeshPhysicalMaterial({ color: '#a5a6a9', metalness: .7, roughness: .56, bumpMap: grain, bumpScale: .0010 }),
+    center: new THREE.MeshPhysicalMaterial({ color: '#a5a6a9', metalness: .82, roughness: .36, envMapIntensity: 1.08, anisotropy: .25, bumpMap: grain, bumpScale: .0007 }),
     black: new THREE.MeshStandardMaterial({ color: '#0c1118', roughness: .7, metalness: .08 }),
     bezel: new THREE.MeshPhysicalMaterial({ color: '#1b2028', roughness: .22, metalness: .42, clearcoat: .65 }),
     glass: new THREE.MeshPhysicalMaterial({ color: '#ffffff', metalness: 1, roughness: .035, transparent:true, opacity:.045, depthWrite:false, clearcoat: .1 }),
     gold: new THREE.MeshStandardMaterial({ color: '#b5a66c', roughness: .45, metalness: .9 }),
   };
+  // A finer polish on the rolled aluminum edge catches narrow studio highlights.
+  // The white click wheel stays matte so the two materials read separately.
+  materials.frontRim = materials.front.clone();
+  materials.frontRim.roughness = .23;
+  materials.frontRim.anisotropy = .16;
   const parts = {};
   function add(name, geometry, material, position = [0, 0, 0], zone = null) {
     const mesh = new THREE.Mesh(geometry, material); mesh.name = name; mesh.position.set(...position);
@@ -136,7 +141,7 @@ export function createClassic(screenTexture) {
   for(let j=0;j<steps;j++)for(let i=0;i<around;i++){const a=j*around+i,b=j*around+(i+1)%around,c=(j+1)*around+i,d=(j+1)*around+(i+1)%around;rimIndices.push(a,c,b,b,c,d)}
   const rimGeometry=new THREE.BufferGeometry();rimGeometry.setAttribute('position',new THREE.Float32BufferAttribute(rimVertices,3));rimGeometry.setIndex(rimIndices);rimGeometry.computeVertexNormals();
   const rimUv=[];for(let i=0;i<rimVertices.length;i+=3)rimUv.push((rimVertices[i]+3.09)/6.18,(rimVertices[i+1]+5.175)/10.35);rimGeometry.setAttribute('uv',new THREE.Float32BufferAttribute(rimUv,2));
-  add('Continuous_rounded_front_lip',rimGeometry,materials.front,[0,0,0],'case');
+  add('Continuous_rounded_front_lip',rimGeometry,materials.frontRim,[0,0,0],'case');
   solid('Recessed_display_bezel', 5.295, 4.01, .10, .10, .018, materials.bezel, [0,dimensions.screenY,.457], 'screen');
   const lcdMaterial = new THREE.MeshBasicMaterial({ map: screenTexture, toneMapped: false });
   const lcd = add('Live_LCD_320x240', new THREE.PlaneGeometry(5.1, 3.825), lcdMaterial, [0,dimensions.screenY,.509], 'screen');
@@ -170,7 +175,9 @@ export function createClassic(screenTexture) {
   let dark = false;
   function setDark(value) {
     if (dark === value) return; dark = value;
-    materials.front.map=value?null:silverCoat;materials.front.color.set(value?'#30343a':'#ffffff'); materials.front.roughness=value?.6:.49;materials.front.needsUpdate=true;
+    for(const [material,silverRoughness] of [[materials.front,.30],[materials.frontRim,.23]]){
+      material.map=value?null:silverCoat;material.color.set(value?'#30343a':'#ffffff');material.roughness=value?.40:silverRoughness;material.needsUpdate=true;
+    }
     materials.wheel.color.set(value?'#20242b':'#eff3f5'); materials.center.color.set(value?'#343b45':'#a5a6a9');
     printMaterial.map.dispose(); printMaterial.map = wheelPrinting(value); printMaterial.needsUpdate=true;
   }

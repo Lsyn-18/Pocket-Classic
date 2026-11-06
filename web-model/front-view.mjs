@@ -19,10 +19,15 @@ function studioEnvironment(){
   const w=512,h=256,data=new Float32Array(w*h*4);
   const directions=[new THREE.Vector3(0,.2,1).normalize(),new THREE.Vector3(-.62,.45,.9).normalize(),new THREE.Vector3(.9,.1,.35).normalize(),new THREE.Vector3(0,1,0)];
   const gaussian=(v,d,spread)=>Math.exp((v.dot(d)-1)/(spread*spread));
+  const strip=(v,cx,width,cy,height)=>Math.exp(-.5*((v.x-cx)/width)**2-.5*((v.y-cy)/height)**2)*Math.max(0,v.z);
   for(let y=0;y<h;y++)for(let x=0;x<w;x++){
     const phi=y/(h-1)*Math.PI,theta=(x/(w-1)-.5)*Math.PI*2;
     const v=new THREE.Vector3(-Math.sin(phi)*Math.cos(theta),Math.cos(phi),Math.sin(phi)*Math.sin(theta));
-    let light=.64+.76*gaussian(v,directions[0],.82)+2.0*gaussian(v,directions[1],.25)+1.15*gaussian(v,directions[2],.14)+.5*gaussian(v,directions[3],.7);
+    // Shaped strip lights and a dark flag give metal a readable bright/dark edge.
+    // Their reflected bands move with the existing restrained phone tilt.
+    let light=.33+.62*gaussian(v,directions[0],.82)+2.1*gaussian(v,directions[1],.25)+1.4*gaussian(v,directions[2],.12)+.38*gaussian(v,directions[3],.7);
+    light+=2.7*strip(v,-.27,.095,.08,.78)+1.5*strip(v,.48,.06,-.12,.67);
+    light*=1-.42*strip(v,.13,.11,.04,.9);
     const i=(y*w+x)*4;data[i]=light;data[i+1]=light;data[i+2]=light;data[i+3]=1;
   }
   const texture=new THREE.DataTexture(data,w,h,THREE.RGBAFormat,THREE.FloatType);texture.mapping=THREE.EquirectangularReflectionMapping;texture.needsUpdate=true;
@@ -33,7 +38,7 @@ scene.add(new THREE.HemisphereLight(0xffffff,0xaaaaaa,.4));
 const key=new THREE.DirectionalLight(0xffffff,.8);key.position.set(-4,7,12);scene.add(key);
 const fill=new THREE.DirectionalLight(0xffffff,.35);fill.position.set(7,-1,5);scene.add(fill);
 RectAreaLightUniformsLib.init();
-const studioCard=new THREE.RectAreaLight(0xffffff,6,4.5,8);studioCard.position.set(-5,7,11);studioCard.lookAt(0,0,0);scene.add(studioCard);
+const studioCard=new THREE.RectAreaLight(0xffffff,12,1.8,12);studioCard.position.set(-2.8,1.5,6);studioCard.lookAt(0,0,0);scene.add(studioCard);
 const screen=makeScreen(app),classic=createClassic(screen.texture);scene.add(classic.model);
 const floor=createStudioFloor(classic.model,-D.height/2-.025);scene.add(floor.group);
 classic.model.rotation.set(-.008,-.025,0);
