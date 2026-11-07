@@ -1,0 +1,43 @@
+name: Publish signed Android 0.6.1
+
+on:
+  push:
+    branches: ['release/v0.6.1']
+    paths: ['.release/v0.6.1/**']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-android-v0.6.1
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct and verify the tested signed APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          cat .release/v0.6.1/apk.part-* > release/Pocket-Classic-0.6.1-debug.apk
+          cp .release/v0.6.1/Pocket-Classic-0.6.1-debug.apk.sha256 release/
+          cd release
+          sha256sum --check Pocket-Classic-0.6.1-debug.apk.sha256
+      - name: Publish GitHub prerelease with APK and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v0.6.1 \
+            release/Pocket-Classic-0.6.1-debug.apk \
+            release/Pocket-Classic-0.6.1-debug.apk.sha256 \
+            --target 573043481d1b7c1d6a0a8fa5ca28c2ba073cad66 \
+            --title "Pocket Classic 0.6.1 · 白银图标" \
+            --notes-file .release/v0.6.1/RELEASE_NOTES.md \
+            --prerelease
