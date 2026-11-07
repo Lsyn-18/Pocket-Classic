@@ -39,11 +39,11 @@ test('a 15 degree physical tilt gives a restrained 1.44 degree model tilt', () =
 });
 test('horizontal movement has a little more travel while vertical motion stays restrained', () => {
   const pose = settle(calibrated(), 45, 20);
-  assert.ok(Math.abs(pose.y * 180 / Math.PI - 1.8) < .002);
+  assert.ok(Math.abs(pose.y * 180 / Math.PI - 2.192727) < .002);
   assert.ok(Math.abs(pose.x) < 1e-10);
   for (const gamma of [-80, 80]) {
     const extreme = settle(calibrated(), 45, gamma);
-    assert.ok(Math.abs(Math.abs(extreme.y) * 180 / Math.PI - 2.75) < .002);
+    assert.ok(Math.abs(Math.abs(extreme.y) * 180 / Math.PI - 3.35) < .002);
   }
 });
 test('large diagonal movement stays inside the horizontal-expanded tilt envelope', () => {
@@ -78,7 +78,7 @@ test('landscape rotates the axes and turning the screen resets the reference', (
   for (const angle of [-90,90]) {
     const horizontal=settle(calibrated(45,0,angle),60,0,angle);
     const vertical=settle(calibrated(45,0,angle),45,15,angle);
-    assert.ok(Math.abs(Math.abs(horizontal.y)*180/Math.PI-1.8)<.002);
+    assert.ok(Math.abs(Math.abs(horizontal.y)*180/Math.PI-2.192727)<.002);
     assert.ok(Math.abs(Math.abs(vertical.x)*180/Math.PI-1.44)<.002);
   }
   const tilt = calibrated(); tilt.push(45, 5, 90, 650);

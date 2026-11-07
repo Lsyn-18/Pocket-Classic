@@ -3,7 +3,7 @@ const wrap = angle => ((angle + 180) % 360 + 360) % 360 - 180;
 
 // All sensor angles are degrees; the renderer receives radians. Alpha is
 // deliberately unused: compass heading must not rotate the front view.
-export const MOTION = Object.freeze({deadZone: 3, gain: .12, maxTilt: 2.2, horizontalScale: 1.25, smoothing: .55, speed: 1.8, calibrationMs: 450, staleMs: 1500});
+export const MOTION = Object.freeze({deadZone: 3, gain: .12, maxTilt: 2.2, horizontalScale: 3.35 / 2.2, smoothing: .55, speed: 1.8, calibrationMs: 450, staleMs: 1500});
 
 export class QuietTilt {
   constructor() { this.reset(); }
@@ -55,7 +55,7 @@ export function createMotionControl({win = window, doc = document, source = null
   let enabled = false, pending = false, phase = 'off', generation = 0, watchdog, listening = false, unsubscribe, suspended=false;
   const messages = {
     off: '沿转轮画圈浏览 · 可开启低灵敏体感', permission: '请允许读取手机姿态',
-    calibrating: '保持自然拿握，稍停片刻完成校准', active: `轻轻倾斜手机 · 左右最多 ${MOTION.maxTilt*MOTION.horizontalScale}°，上下 ${MOTION.maxTilt}°`,
+    calibrating: '保持自然拿握，稍停片刻完成校准', active: `轻轻倾斜手机 · 左右最多 ${(MOTION.maxTilt*MOTION.horizontalScale).toFixed(2)}°，上下 ${MOTION.maxTilt}°`,
     paused: '体感已暂停，返回后自动校准', insecure: '手机体感需要 HTTPS 安全页面',
     unsupported: source?'当前手机没有可用的姿态传感器':'当前浏览器不支持体感，仍可操作转轮', denied: '体感未获授权，可在浏览器设置中允许后重试',
     unavailable: source?'未收到手机姿态，请重新开启体感':'未收到手机姿态，请用支持体感的手机浏览器重试'
