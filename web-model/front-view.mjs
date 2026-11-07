@@ -40,10 +40,11 @@ classic.model.rotation.set(-.008,-.025,0);
 let targetX=-.008,targetY=-.025,previous=performance.now(),gesture=null,renderedFrames=0;
 const compactQuery=matchMedia('(max-width:1000px)');
 const compact=()=>!!app.native||compactQuery.matches;
-// Embedded WebView can report its viewport before percentage heights settle.
-// Anchor the native root to the viewport and refresh it on rotation or resize.
-function nativeViewport(){if(!app.native)return;const height=window.innerHeight;document.documentElement.style.height=height+'px';document.body.style.height=height+'px';document.querySelector('.layout').style.height=height+'px';}
-nativeViewport();window.addEventListener('resize',()=>{nativeViewport();measure();});
+// Some immersive Android WebViews resolve vh/svh/dvh to zero even while
+// visualViewport reports the real window. Share that height with dialogs too.
+function nativeViewport(){if(!app.native)return;const height=window.visualViewport?.height||window.innerHeight;if(!(height>0))return;document.documentElement.style.setProperty('--app-height',height+'px');document.documentElement.style.height=height+'px';document.body.style.height=height+'px';document.querySelector('.layout').style.height=height+'px';}
+function refreshViewport(){nativeViewport();measure();}
+nativeViewport();window.addEventListener('resize',refreshViewport);window.visualViewport?.addEventListener('resize',refreshViewport);
 const tools=document.getElementById('playerTools'),optionsToggle=document.getElementById('playerOptionsToggle');
 function closeOptions(){document.body.classList.remove('options-open');optionsToggle.setAttribute('aria-expanded','false')}
 optionsToggle.onclick=()=>{const open=document.body.classList.toggle('options-open');optionsToggle.setAttribute('aria-expanded',String(open))};
