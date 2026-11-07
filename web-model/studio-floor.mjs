@@ -6,13 +6,13 @@ export function createStudioFloor(model, floorY,{baseline=false}={}) {
   const reflectionMatrix=new THREE.Matrix4().set(1,0,0,0, 0,-1,0,2*floorY, 0,0,1,0, 0,0,0,1);
   function reflectedMaterial(source){
     if(materials.has(source))return materials.get(source);
-    const material=source.clone();material.transparent=true;material.depthWrite=false;material.opacity=source.opacity*.26;
+    const material=source.clone();material.transparent=true;material.depthWrite=false;material.opacity=source.opacity*(baseline?.26:.18);
     if('roughness' in material)material.roughness=Math.max(.64,material.roughness);
     if('clearcoat' in material)material.clearcoat=0;
     material.onBeforeCompile=shader=>{
       shader.uniforms.floorY={value:floorY};
       shader.vertexShader='varying float reflectionWorldY;\n'+shader.vertexShader.replace('#include <project_vertex>','reflectionWorldY=(modelMatrix*vec4(transformed,1.0)).y;\n#include <project_vertex>');
-      shader.fragmentShader='uniform float floorY;\nvarying float reflectionWorldY;\n'+shader.fragmentShader.replace('#include <dithering_fragment>','#include <dithering_fragment>\nfloat fade=clamp(1.0-(floorY-reflectionWorldY)/1.35,0.0,1.0);\ngl_FragColor.a*=fade*fade;');
+      shader.fragmentShader='uniform float floorY;\nvarying float reflectionWorldY;\n'+shader.fragmentShader.replace('#include <dithering_fragment>','#include <dithering_fragment>\nfloat fade=clamp(1.0-(floorY-reflectionWorldY)/'+(baseline?'1.35':'0.95')+',0.0,1.0);\ngl_FragColor.a*=fade*fade;');
     };
     material.customProgramCacheKey=()=> 'pocket-floor-fade-v1';
     materials.set(source,material);return material;

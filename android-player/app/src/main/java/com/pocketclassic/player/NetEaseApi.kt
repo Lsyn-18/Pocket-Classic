@@ -138,6 +138,6 @@ class NetEaseApi(private val store: MusicSessionStore) {
         ensureSession(session)
         val item=body.optJSONArray("data")?.optJSONObject(0)?:throw IOException("歌曲暂时没有可用音源")
         val url=item.optString("url");if(!url.startsWith("https://")&&!url.startsWith("http://"))throw IOException("这首歌受账号或版权权限限制，请尝试下一首")
-        return PlayResource(url,!item.isNull("freeTrialInfo"),item.optLong("time"))
+        return PlayResource(url,!item.isNull("freeTrialInfo"),item.optLong("time"),item.optString("level"))
     }
 }

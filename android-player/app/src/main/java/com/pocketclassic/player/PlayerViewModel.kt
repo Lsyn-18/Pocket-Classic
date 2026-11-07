@@ -38,7 +38,7 @@ import com.google.zxing.qrcode.QRCodeWriter
 data class ClassicState(
     val connected: Boolean = false, val nickname: String = "", val busy: Boolean = false,
     val message: String = "", val showConnection: Boolean = false, val qrImage: Bitmap? = null,
-    val loginUrl: String = "", val loginPhase: String = "idle"
+    val loginUrl: String = "", val loginPhase: String = "idle", val theme: String = "auto"
 )
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -47,7 +47,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val api = NetEaseApi(store)
     private var loginJob: Job? = null
     private var loginGeneration = 0L
-    var state by mutableStateOf(ClassicState())
+    var state by mutableStateOf(ClassicState(theme = store.theme))
         private set
     private var controller: MediaController? = null
     private var loading: Job? = null
@@ -129,8 +129,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         else if(!state.connected && !loginJob.let { it?.isActive==true })beginLogin()
     }
     fun disconnect() {
+        PlaybackService.clearQuality()
         connectionGeneration++;loginGeneration++;loadGeneration++;loginJob?.cancel();loading?.cancel(); controller?.stop(); controller?.clearMediaItems(); store.clear()
-        state = ClassicState(message = "已退出网易云音乐")
+        state = ClassicState(message = "已退出网易云音乐", theme = store.theme)
     }
     suspend fun browserApi(route: String): JSONObject {
         if (!NativeContract.allowedApi(route)) throw IOException("不支持此音乐操作")
@@ -140,6 +141,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         return result
     }
     suspend fun startQueue(data: JSONObject) {
+        PlaybackService.clearQuality()
         val tracks = data.getJSONArray("tracks")
         require(tracks.length() in 1..5000) { "播放列表过长或为空" }
         val index = data.getInt("index"); require(index in 0 until tracks.length())
@@ -177,7 +179,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
-    fun preferences(data: JSONObject) { val quality=data.optString("quality",store.quality);require(MusicQuality.valid(quality));store.dark = data.optBoolean("dark"); store.haptics = data.optBoolean("haptics", true);store.quality=quality }
+    fun preferences(data: JSONObject) { val quality=data.optString("quality",store.quality);require(MusicQuality.valid(quality));store.dark = data.optBoolean("dark"); store.haptics = data.optBoolean("haptics", true);store.quality=quality
+        val theme=data.optString("theme",store.theme);require(theme in setOf("auto","light","dark"));store.theme=theme;store.largeText=data.optBoolean("largeText",store.largeText);store.reducedMotion=data.optBoolean("reducedMotion",store.reducedMotion);if(state.theme!=theme)state=state.copy(theme=theme)
+    }
     fun snapshot(includeQueue: Boolean): JSONObject {
         val c = controller; val item = c?.currentMediaItem; val extra = item?.mediaMetadata?.extras
         val duration = c?.duration?.takeIf { it > 0 && it != C.TIME_UNSET } ?: 0
@@ -189,6 +193,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .put("mode", extra?.getString("mode") ?: "playlist").put("shuffle", c?.shuffleModeEnabled ?: false)
             .put("repeat", c?.repeatMode ?: 0).put("dark", store.dark).put("haptics", store.haptics)
             .put("quality",store.quality)
+            .put("theme",store.theme).put("largeText",store.largeText).put("reducedMotion",store.reducedMotion)
+            .put("actualQuality",if(c?.playbackState==Player.STATE_READY) PlaybackService.qualityFor(item?.mediaId?.toLongOrNull() ?: 0L) else "")
             .put("current", item?.let(::trackJson) ?: JSONObject.NULL)
             .put("error", c?.playerError?.cause?.message?.take(140) ?: c?.playerError?.message?.take(140) ?: radioError ?: "")
         if (includeQueue) result.put("tracks", JSONArray().apply { if (c != null) for (i in 0 until c.mediaItemCount) put(trackJson(c.getMediaItemAt(i))) })

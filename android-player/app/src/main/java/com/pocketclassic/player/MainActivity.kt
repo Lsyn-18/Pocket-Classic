@@ -16,11 +16,14 @@ import androidx.activity.addCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
@@ -84,7 +87,8 @@ class MainActivity : ComponentActivity() {
         }
         setContent {
             val state = vm.state
-            MaterialTheme {
+            val darkAppearance = state.theme == "dark" || state.theme == "auto" && isSystemInDarkTheme()
+            MaterialTheme(colorScheme = if(darkAppearance) darkColorScheme(primary=Color(0xFF9ACBFA),surface=Color(0xFF1D2835),onSurface=Color(0xFFE5EDF6),onSurfaceVariant=Color(0xFFB9CADB)) else lightColorScheme(primary=Color(0xFF246AB4),surface=Color(0xFFF8FAFC),onSurface=Color(0xFF263F54),onSurfaceVariant=Color(0xFF4C6379))) {
                 Box(Modifier.fillMaxSize().background(Color(0xFFF7F9FC)).safeDrawingPadding()) {
                     AndroidView(factory = { playerHost.webView }, modifier = Modifier.fillMaxSize())
                 }

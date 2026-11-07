@@ -73,7 +73,7 @@ function canvasTexture(w, h, draw) {
 
 function wheelPrinting(dark) {
   return canvasTexture(1024, 1024, (c, w) => {
-    c.fillStyle = dark ? '#eef0f3' : '#959da5'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = dark ? '#eef0f3' : '#697783'; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.font = '54px Arial'; c.fillText('MENU', 512, 101);
     const tri = (x, y, reverse = false) => { c.beginPath(); c.moveTo(x + (reverse ? 20 : 0), y - 14); c.lineTo(x + (reverse ? 0 : 20), y); c.lineTo(x + (reverse ? 20 : 0), y + 14); c.closePath(); c.fill(); };
     c.fillRect(96, 497, 7, 30); tri(104, 512, true); tri(126, 512, true);
@@ -233,19 +233,18 @@ export function createClassic(screenTexture,{baseline=visualBaseline}={}) {
   }
   const engraving = new THREE.MeshStandardMaterial({ map: engravingTexture(), transparent:true, opacity:.42, metalness:.65, roughness:.53, depthWrite:false });
   const backMark = add('Rear_laser_engraving', new THREE.PlaneGeometry(4.9,7.35), engraving, [0,.05,-.527]); backMark.rotation.y = Math.PI; backMark.castShadow = false;
-  let dark = false,pressed=false;
+  let dark = false;
   function setDark(value) {
     if (dark === value) return; dark = value;
     for(const [material,silverRoughness] of [[materials.front,baseline?.30:.46],[materials.frontRim,baseline?.36:.23]]){
-      material.map=value?null:silverCoat;material.color.set(value?(baseline?'#30343a':'#2c3542'):'#ffffff');material.roughness=value?(baseline?.40:material===materials.front?.52:.27):silverRoughness;
+      material.map=value?null:silverCoat;material.color.set(value?(baseline?'#30343a':'#303236'):'#ffffff');material.roughness=value?(baseline?.40:material===materials.front?.52:.27):silverRoughness;
       if(!baseline)material.metalness=material===materials.front?(value?.91:.96):.95;material.needsUpdate=true;
     }
-    materials.wheel.color.set(value?(baseline?'#20242b':'#11171e'):'#eff3f5'); materials.center.color.set(value?(baseline?'#343b45':'#303b49'):(baseline?'#a5a6a9':'#bdc3cb'));
-    materials.wheelLip?.color.set(value?'#2f3946':'#b6bfc9');
+    materials.wheel.color.set(value?(baseline?'#20242b':'#181a1e'):'#e8edf1'); materials.center.color.set(value?(baseline?'#343b45':'#34373d'):(baseline?'#a5a6a9':'#bdc3cb'));
+    materials.wheelLip?.color.set(value?'#393d43':'#aeb9c3');
     printMaterial.map.dispose(); printMaterial.map = wheelPrinting(value); printMaterial.needsUpdate=true;
   }
   function setHold(value) { holdSlider.position.x = value ? 2.12 : 1.79; orange.visible = value; }
-  function setPressed(value){if(baseline||pressed===value)return;pressed=value;materials.center.roughness=value?.42:.44;materials.center.envMapIntensity=value?1.15:1.08;}
   setHold(false);
-  return { model, parts, materials, lcd, center, setDark, setHold,setPressed };
+  return { model, parts, materials, lcd, center, setDark, setHold };
 }

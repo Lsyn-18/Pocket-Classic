@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import {createRoamStream} from './roam-stream.mjs';
 import {createWheelInput} from './wheel-input.mjs';
 import {coverUrl} from './artwork.mjs';
+import {menuMarker,listWindow,emptyContent,qualityLabel,appearanceIsDark,canAdvance} from './presentation.mjs';
 const source=fs.readFileSync(new URL('./player.mjs',import.meta.url),'utf8').replace(/^import[^\n]+\n/gm,'');
 const song=id=>({id,name:'Track '+id,artist:'Artist',durationMs:120000});
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -18,7 +19,7 @@ function fixture(routes={}){
   Object.assign(element('audio'),{paused:true,currentTime:0,duration:120,volume:.65,load(){},pause(){this.paused=true;},async play(){this.paused=false;playCount++;}});
   const document={getElementById:element,body:element('body'),querySelector:selector=>selector==='.device'?element('device'):null,querySelectorAll:()=>[],createElement:()=>element('spinner'),addEventListener(){}};
   const window={};const fetch=async(url,options)=>{const route=url.slice(5),handler=routes[route.split('?')[0]];const body=options?.body?JSON.parse(options.body):null;const result=handler?await handler(body,route):route==='resolve'?{url:'https://test.music.126.net/test.mp3',trial:null}:{playlists:[]};return {ok:!result.error,json:async()=>result};};
-  vm.runInNewContext(source,{window,document,navigator:{},location:{protocol:'file:'},fetch,createRoamStream,createWheelInput,coverUrl,console,setTimeout,clearTimeout,setInterval,clearInterval,MediaMetadata:class{}});
+  vm.runInNewContext(source,{window,document,navigator:{},location:{protocol:'file:'},fetch,createRoamStream,createWheelInput,coverUrl,menuMarker,listWindow,emptyContent,qualityLabel,appearanceIsDark,canAdvance,console,setTimeout,clearTimeout,setInterval,clearInterval,MediaMetadata:class{}});
   const app=window.PocketClassicContext;app.state.connected=true;
   return {app,elements,listeners,get playCount(){return playCount;}};
 }
@@ -75,4 +76,29 @@ test('daily API failure stays visible and does not invent fallback songs',async(
 });
 test('ended event advances private roaming and normal tracks still respect repeat',async()=>{
   const {app,listeners}=fixture({roam:()=>({tracks:[1,2,3].map(song)})});await app.select();app.state.selected=2;await app.select();listeners.get('audio:ended')();await flush();assert.equal(app.state.current.id,2);
+});
+
+test('long centre press opens the actual queue and selecting a queued song preserves its source',async()=>{
+  const {app}=fixture({daily:()=>({tracks:[song(41),song(42)]})});
+  await app.select();app.state.selected=1;await app.select();await app.select();
+  app.action('select',true);assert.equal(app.state.page,'queue');assert.equal(app.entries()[0].id,41);
+  app.state.selected=1;await app.select();assert.equal(app.state.current.id,42);assert.equal(app.state.queueMode,'daily');
+});
+
+test('environment appearance and larger menus never change the device finish',async()=>{
+  const {app}=fixture();app.state.selected=3;await app.select();app.state.selected=4;await app.select();assert.equal(app.state.dark,true);
+  app.state.selected=6;await app.select();assert.equal(app.state.page,'appearance');await app.select();assert.equal(app.state.theme,'light');
+  app.state.selected=1;await app.select();assert.equal(app.state.largeText,true);assert.equal(app.state.dark,true);
+  app.state.selected=2;await app.select();assert.equal(app.state.reducedMotion,true);
+});
+
+test('a failed list exposes a recoverable error and centre press retries the same request',async()=>{
+  let attempts=0;const {app}=fixture({daily:()=>++attempts===1?{error:'网络暂时不可用'}:{tracks:[song(77)]}});
+  await app.select();app.state.selected=1;await app.select();assert.equal(app.state.problem.message,'网络暂时不可用');
+  await app.select();assert.equal(attempts,2);assert.equal(app.state.problem,null);assert.equal(app.state.tracks[0].id,77);assert.equal(app.state.history.length,2);
+});
+
+test('requested quality and actual downgraded audio quality remain distinct',async()=>{
+  const {app}=fixture({daily:()=>({tracks:[song(7)]}),resolve:()=>({url:'https://test.music.126.net/song.mp3',level:'standard'})});
+  app.state.quality='hires';await app.select();app.state.selected=1;await app.select();await app.select();assert.equal(app.state.actualQuality,'standard');assert.equal(app.state.quality,'hires');assert.equal(app.state.buffering,false);
 });

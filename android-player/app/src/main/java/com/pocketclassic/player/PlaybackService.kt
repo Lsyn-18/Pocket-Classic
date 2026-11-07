@@ -31,6 +31,12 @@ import java.io.IOException
 
 @UnstableApi
 class PlaybackService : MediaSessionService() {
+    companion object {
+        // Display metadata only: no resource URLs or account credentials cross the bridge.
+        private val resolvedQuality = java.util.concurrent.ConcurrentHashMap<Long,String>()
+        fun qualityFor(id: Long): String = resolvedQuality[id] ?: ""
+        fun clearQuality() = resolvedQuality.clear()
+    }
     private var session: MediaSession? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val radio = RadioContinuation()
@@ -41,11 +47,14 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
+        clearQuality()
         store = MusicSessionStore(this); api = NetEaseApi(store)
         val factory = ResolvingDataSource.Factory(DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(false)) { spec ->
             if (spec.uri.scheme != "pocketclassic") throw IOException("不支持此音频来源")
             val id = spec.uri.lastPathSegment?.toLongOrNull() ?: throw IOException("无效歌曲")
             val resource = api.resolve(id)
+            if (resolvedQuality.size > 100) resolvedQuality.clear()
+            resolvedQuality[id] = resource.level
             spec.withUri(Uri.parse(resource.url))
         }
         val player = ExoPlayer.Builder(this).setMediaSourceFactory(DefaultMediaSourceFactory(factory)).build().apply {

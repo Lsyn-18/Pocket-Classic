@@ -41,4 +41,7 @@ class MusicSessionStore(context: Context) {
     var dark: Boolean get()=prefs.getBoolean("dark",false);set(value) { prefs.edit().putBoolean("dark",value).apply() }
     var haptics: Boolean get()=prefs.getBoolean("haptics",true);set(value) { prefs.edit().putBoolean("haptics",value).apply() }
     var quality: String get()=MusicQuality.restored(prefs.getString("quality",null));set(value) { require(MusicQuality.valid(value));prefs.edit().putString("quality",value).apply() }
+    var theme: String get()=prefs.getString("theme","auto").takeIf { it in setOf("auto","light","dark") } ?: "auto";set(value) { require(value in setOf("auto","light","dark"));prefs.edit().putString("theme",value).apply() }
+    var largeText: Boolean get()=prefs.getBoolean("largeText",false);set(value) { prefs.edit().putBoolean("largeText",value).apply() }
+    var reducedMotion: Boolean get()=prefs.getBoolean("reducedMotion",false);set(value) { prefs.edit().putBoolean("reducedMotion",value).apply() }
 }
