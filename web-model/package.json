@@ -1,6 +1,7 @@
 {
   "name": "pocket-classic-3d-model",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": { "build": "node build.mjs", "build:android": "node build.mjs --android", "test": "node --test motion.test.mjs roam-stream.test.mjs player.test.mjs native-platform.test.mjs wheel-input.test.mjs button-press.test.mjs artwork.test.mjs visual.test.mjs" },

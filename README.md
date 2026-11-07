@@ -1,5 +1,9 @@
 # Pocket Classic
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+项目采用 **MIT 开源许可证**，欢迎查看、下载、Fork、修改和商用。分发时保留版权声明与许可证即可，不强制公开修改后的源码。见 [开源使用要求](OPEN_SOURCE.md)、[贡献指南](CONTRIBUTING.md) 和 [安装包下载](https://github.com/Lsyn-18/Pocket-Classic/releases)。
+
 <p align="center"><img src="docs/branding/pocket-classic-icon.svg" width="128" alt="Pocket Classic 白银色软件图标"></p>
 
 > 当前版本为 **Android 0.7.2 独立测试版**，移除网易云已下载入口，保留本地音乐，并增强机身体感倾斜幅度与响应。见 [离线音乐说明](docs/OFFLINE-MUSIC.md)。下载 [Android 0.7.2 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.7.2)，附 SHA-256 校验文件。
@@ -155,4 +159,4 @@ Build-Android.ps1        Windows 安卓构建与检查入口
 
 这是非官方开发项目，与 Apple、网易云音乐无关联。音乐按账号和版权权限提供，可能返回试听或暂不可用；未接入替代音源或自动解灰。私人漫游当前提供私人 FM 推荐与连续播放，尚未接入场景选择、红心及不感兴趣反馈。
 
-安卓直接访问网易云当前接口，不依赖第三方公共 API 主机；上游接口调整可能需要更新应用。登录凭证不进入 JavaScript，不上传开发者服务器。浏览器开发用的本地 HTTP 服务仅用于可信局域网，请勿直接暴露到公网。仓库忽略登录会话、运行数据、工具链、依赖、构建缓存和安装包。项目尚未指定开源许可证，第三方组件保留各自许可与权利归属。
+安卓直接访问网易云当前接口，不依赖第三方公共 API 主机；上游接口调整可能需要更新应用。登录凭证不进入 JavaScript，不上传开发者服务器。浏览器开发用的本地 HTTP 服务仅用于可信局域网，请勿直接暴露到公网。仓库忽略登录会话、运行数据、工具链、依赖、构建缓存和安装包。项目自有代码与文档采用 MIT 许可证，第三方组件保留各自许可与权利归属。

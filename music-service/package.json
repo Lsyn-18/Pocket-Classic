@@ -1,6 +1,7 @@
 {
   "name": "pocket-classic-music-service",
   "version": "0.1.0",
+  "license": "MIT",
   "private": true,
   "scripts": { "start": "node start.cjs", "test": "node --test gateway.test.cjs discovery.test.cjs library.test.cjs" },
   "dependencies": { "@neteasecloudmusicapienhanced/api": "4.41.1" },

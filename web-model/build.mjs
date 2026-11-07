@@ -37,6 +37,8 @@ html=html.replace('<button id="closeHelp" class="primary">开始听歌</button><
 html=html.replace('</body>',()=>`<script>${js}</script></body>`);
 if(process.argv.includes('--visual-baseline'))html=html.replace('<script>'+js,()=>'<script>window.PocketClassicVisualProfile="baseline";</script><script>'+js);
 const thirdPartyLicense=fs.readFileSync(path.join(here,'node_modules/three/LICENSE'),'utf8');
+const projectLicense=fs.readFileSync(path.join(root,'LICENSE'),'utf8');
+html=html.replace('</head>',()=>`<!--\nPocket Classic license\n${projectLicense}\n-->\n</head>`);
 html=html.replace('</head>',()=>`<!--\nThree.js license\n${thirdPartyLicense}\n-->\n</head>`);
 fs.writeFileSync(path.join(here,'THREE-LICENSE.txt'),thirdPartyLicense);
 for(const script of html.matchAll(/<script>([\s\S]*?)<\/script>/g))new Function(script[1]);
@@ -51,6 +53,7 @@ if(process.argv.includes('--publish')){
 }
 if(process.argv.includes('--android')){
   const assets=path.join(root,'android-player/app/src/main/assets');fs.mkdirSync(assets,{recursive:true});
+  fs.copyFileSync(path.join(root,'LICENSE'),path.join(assets,'POCKET-CLASSIC-LICENSE.txt'));
   const policy="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'";
   const android=html.replace('<html lang="zh-CN">','<html lang="zh-CN" class="compact-player">').replace('<body>','<body class="compact-player native-app">').replace('<head>','<head><meta http-equiv="Content-Security-Policy" content="'+policy+'">');
   fs.writeFileSync(path.join(assets,'player.html'),android);
