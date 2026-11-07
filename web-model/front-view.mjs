@@ -14,7 +14,9 @@ document.body.classList.toggle('visual-baseline',visualBaseline);
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance',preserveDrawingBuffer:visualBaseline});
 let shaderErrors=0;
 renderer.debug.onShaderError=(gl,program,vertex,fragment)=>{shaderErrors++;console.error('WebGL shader compilation failed',gl.getProgramInfoLog(program),gl.getShaderInfoLog(vertex),gl.getShaderInfoLog(fragment));};
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.02;renderer.setClearColor(0,0);
+const quality=screenQuality(renderer.capabilities);
+const renderPixelRatio=Math.min(2,!visualBaseline&&!app.native&&quality.pixelScale===4?Math.max(1.5,devicePixelRatio):devicePixelRatio);
+renderer.setPixelRatio(renderPixelRatio);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.02;renderer.setClearColor(0,0);
 renderer.domElement.setAttribute('aria-label','iPod Classic 正面三维模型，轻移鼠标或开启体感改变反光');host.append(renderer.domElement);
 const scene=new THREE.Scene();
 const camera=new THREE.OrthographicCamera(-4,4,6,-6,.1,60);camera.position.set(0,0,20);camera.lookAt(0,0,0);
@@ -27,7 +29,6 @@ const fill=new THREE.DirectionalLight(0xffffff,.35);fill.position.set(7,-1,5);sc
 RectAreaLightUniformsLib.init();
 const studioCard=new THREE.RectAreaLight(0xffffff,visualBaseline?12:5.5,visualBaseline?1.8:4.5,visualBaseline?12:8);studioCard.position.set(...(visualBaseline?[-2.8,1.5,6]:[-3.8,4.2,8]));studioCard.lookAt(0,0,0);scene.add(studioCard);
 const rimLight=new THREE.RectAreaLight(0xffead1,visualBaseline?0:1.6,3,7);rimLight.position.set(5,2,6);rimLight.lookAt(0,0,0);if(!visualBaseline)scene.add(rimLight);
-const quality=screenQuality(renderer.capabilities);
 const screen=makeScreen(app,{...quality,baseline:visualBaseline}),classic=createClassic(screen.texture,{baseline:visualBaseline});scene.add(classic.model);
 const floor=createStudioFloor(classic.model,-D.height/2-.025,{baseline:visualBaseline});scene.add(floor.group);
 const atmosphere=createAtmosphere({scene,camera,native:!!app.native,baseline:visualBaseline});
