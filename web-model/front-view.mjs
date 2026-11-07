@@ -15,7 +15,7 @@ const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreferenc
 let shaderErrors=0;
 renderer.debug.onShaderError=(gl,program,vertex,fragment)=>{shaderErrors++;console.error('WebGL shader compilation failed',gl.getProgramInfoLog(program),gl.getShaderInfoLog(vertex),gl.getShaderInfoLog(fragment));};
 const quality=screenQuality(renderer.capabilities);
-const renderPixelRatio=Math.min(2,!visualBaseline&&!app.native&&quality.pixelScale===4?Math.max(1.5,devicePixelRatio):devicePixelRatio);
+const renderPixelRatio=!visualBaseline&&!app.native&&quality.pixelScale===4?2:Math.min(devicePixelRatio,2);
 renderer.setPixelRatio(renderPixelRatio);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.02;renderer.setClearColor(0,0);
 renderer.domElement.setAttribute('aria-label','iPod Classic 正面三维模型，轻移鼠标或开启体感改变反光');host.append(renderer.domElement);
 const scene=new THREE.Scene();

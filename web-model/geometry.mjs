@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import {visualBaseline} from './visual-profile.mjs';
+import {createLCDMaterial} from './lcd-material.mjs';
 
 export const dimensions = { width: 6.18, height: 10.35, depth: 1.05, wheelRadius: 1.916, wheelY: -2.15, screenY: 2.66, screenWidth: 5.1, screenHeight: 3.825 };
 
@@ -183,7 +184,7 @@ export function createClassic(screenTexture,{baseline=visualBaseline}={}) {
   const rimUv=[];for(let i=0;i<rimVertices.length;i+=3)rimUv.push((rimVertices[i]+3.09)/6.18,(rimVertices[i+1]+5.175)/10.35);rimGeometry.setAttribute('uv',new THREE.Float32BufferAttribute(rimUv,2));
   add('Continuous_rounded_front_lip',rimGeometry,materials.frontRim,[0,0,0],'case');
   solid('Recessed_display_bezel', 5.295, 4.01, .10, .10, .018, materials.bezel, [0,dimensions.screenY,.457], 'screen');
-  const lcdMaterial = new THREE.MeshBasicMaterial({ map: screenTexture, toneMapped: false });
+  const lcdMaterial = createLCDMaterial(screenTexture,{baseline});
   const lcd = add('Live_LCD_320x240', new THREE.PlaneGeometry(5.1, 3.825), lcdMaterial, [0,dimensions.screenY,.509], 'screen');
   lcd.userData.lcd = true; lcd.castShadow = false;
   const glass = solid('Separate_display_glass', 5.15, 3.875, .045, .022, .005, materials.glass, [0,dimensions.screenY,.514], 'screen');
