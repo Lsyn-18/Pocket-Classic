@@ -3,7 +3,7 @@ const wrap = angle => ((angle + 180) % 360 + 360) % 360 - 180;
 
 // All sensor angles are degrees; the renderer receives radians. Alpha is
 // deliberately unused: compass heading must not rotate the front view.
-export const MOTION = Object.freeze({deadZone: 3, gain: .48, maxTilt: 8, horizontalScale: 1.5, smoothing: .22, speed: 18, calibrationMs: 450, staleMs: 1500});
+export const MOTION = Object.freeze({deadZone: 3, gain: .48, maxTilt: 8, horizontalScale: 1.5, calibrationMs: 450, staleMs: 1500});
 
 export class QuietTilt {
   constructor() { this.reset(); }
@@ -37,15 +37,12 @@ export class QuietTilt {
     this.desired = magnitude ? {x: x / magnitude * amount, y: y / magnitude * amount * MOTION.horizontalScale} : {x: 0, y: 0};
     return true;
   }
-  step(dt, now, frozen = false) {
+  step(_dt, now, frozen = false) {
     if (frozen) return {...this.output};
     const target = this.base && now - this.lastSample <= MOTION.staleMs ? this.desired : {x: 0, y: 0};
-    dt = Math.max(0, Math.min(.05, dt));
-    const ease = 1 - Math.exp(-dt / MOTION.smoothing);
-    let dx = (target.x - this.output.x) * ease, dy = (target.y - this.output.y) * ease;
-    const distance = Math.hypot(dx, dy), limit = MOTION.speed * RAD * dt;
-    if (distance > limit) { dx *= limit / distance; dy *= limit / distance; }
-    this.output.x += dx; this.output.y += dy;
+    // Rotation-vector sensors already fuse the physical readings. Present the
+    // latest bounded pose directly instead of adding another delayed follower.
+    this.output = {...target};
     return {...this.output};
   }
 }

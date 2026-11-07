@@ -20,11 +20,11 @@ class NativeMotion(private val activity: Activity, private val emit: (JSONObject
     fun foreground(value: Boolean) { foreground = value; update() }
     private fun update() {
         val needed = enabled && foreground && available
-        if (needed && !registered) { lastSample = 0; registered = manager.registerListener(this, sensor, 50_000) }
+        if (needed && !registered) { lastSample = 0; registered = manager.registerListener(this, sensor, 10_000) }
         if (!needed && registered) { manager.unregisterListener(this); registered = false }
     }
     override fun onSensorChanged(event: SensorEvent) {
-        if (!enabled || !foreground || event.timestamp - lastSample < 50_000_000L) return
+        if (!enabled || !foreground || event.timestamp - lastSample < 8_000_000L) return
         lastSample = event.timestamp
         SensorManager.getRotationMatrixFromVector(matrix, event.values)
         val angles = motionAngles(matrix)

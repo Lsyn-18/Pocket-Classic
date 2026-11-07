@@ -115,7 +115,7 @@ function frame(now){const dt=Math.min(.05,(now-previous)/1000);previous=now;cons
   const sensor=motion.tick(dt,now,!!gesture),usingSensor=motion.state.enabled;
   const x=usingSensor?-.008+sensor.x:targetX,y=usingSensor?-.025+sensor.y:targetY;
   // Freeze both input and the rendered pose while using the wheel or buttons.
-  if(!gesture){classic.model.rotation.x+=(x-classic.model.rotation.x)*ease;classic.model.rotation.y+=(y-classic.model.rotation.y)*ease}
+  if(!gesture){const follow=usingSensor?1:ease;classic.model.rotation.x+=(x-classic.model.rotation.x)*follow;classic.model.rotation.y+=(y-classic.model.rotation.y)*follow}
   classic.model.updateMatrixWorld(true);classic.setDark(app.state.dark);classic.setHold(app.state.hold);screen.draw();
   if(!visualBaseline){const r=host.getBoundingClientRect(),project=(x,y)=>{const p=classic.model.localToWorld(new THREE.Vector3(x,y,.530)).project(camera);return {x:(p.x*.5+.5)*r.width,y:(-p.y*.5+.5)*r.height};},tl=project(-D.screenWidth/2,D.screenY+D.screenHeight/2),tr=project(D.screenWidth/2,D.screenY+D.screenHeight/2),bl=project(-D.screenWidth/2,D.screenY-D.screenHeight/2);screen.canvas.style.transform=`matrix(${(tr.x-tl.x)/320},${(tr.y-tl.y)/320},${(bl.x-tl.x)/240},${(bl.y-tl.y)/240},${tl.x},${tl.y})`;}
   if(!visualBaseline){studioCard.position.x=-3.8+(classic.model.rotation.y+.025)*7;studioCard.position.y=4.2+(classic.model.rotation.x+.008)*5;studioCard.lookAt(0,0,0);}

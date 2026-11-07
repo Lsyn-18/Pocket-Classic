@@ -46,9 +46,11 @@ test('horizontal movement reaches 8.64 degrees at a natural 15 degree phone tilt
     assert.ok(Math.abs(Math.abs(extreme.y) * 180 / Math.PI - 12) < .002);
   }
 });
-test('a normal tilt becomes visible within half a second and vertical travel caps at eight degrees', () => {
-  assert.ok(degrees(settle(calibrated(),60,5,0,.5))>4.5);
-  assert.ok(degrees(settle(calibrated(),45,20,0,.5))>6);
+test('the first frame presents the latest sensor pose without a catch-up tail', () => {
+  const tilt=calibrated();tilt.push(60,5,0,616);
+  assert.ok(Math.abs(degrees(tilt.step(.016,616))-5.76)<.002);
+  tilt.push(45,20,0,632);const pose=tilt.step(.016,632);
+  assert.ok(Math.abs(pose.x)<1e-10);assert.ok(Math.abs(pose.y*180/Math.PI-8.64)<.002);
   assert.ok(Math.abs(degrees(settle(calibrated(),140,5))-8)<.002);
 });
 test('large diagonal movement stays inside the horizontal-expanded tilt envelope', () => {
@@ -57,14 +59,15 @@ test('large diagonal movement stays inside the horizontal-expanded tilt envelope
   assert.ok(degrees(pose) <= MOTION.maxTilt*MOTION.horizontalScale + 1e-10);
   assert.ok(degrees(pose) > MOTION.maxTilt);
 });
-test('sudden sensor spike is rate limited, then settles without persistent drift', () => {
+test('large abrupt readings stay bounded and returning to neutral has no delayed drift', () => {
   const tilt = calibrated();
   tilt.push(140, 80, 0, 616);
-  assert.ok(degrees(tilt.step(.016, 616)) <= MOTION.speed * .016 + 1e-10);
+  const poseAtSpike=tilt.step(.016,616);
+  assert.ok(Math.hypot(poseAtSpike.x,poseAtSpike.y/MOTION.horizontalScale)*180/Math.PI<=MOTION.maxTilt+1e-10);
   const pose = settle(tilt, 45, 5, 0, 3);
   assert.ok(degrees(pose) < .001);
 });
-test('time based filtering gives the same movement at 30 and 120 Hz', () => {
+test('direct following gives the same movement at 30 and 120 Hz', () => {
   const a = settle(calibrated(), 65, 5, 0, 1, 30);
   const b = settle(calibrated(), 65, 5, 0, 1, 120);
   assert.ok(Math.abs(degrees(a) - degrees(b)) < .015);
@@ -76,8 +79,7 @@ test('beta wrap through 180 degrees does not cause a full turn', () => {
 test('landscape rotates the axes and turning the screen resets the reference', () => {
   const portrait = settle(calibrated(45, 0, 0), 60, 0, 0);
   const landscape = settle(calibrated(45, 0, 90), 60, 0, 90);
-  // The shared angular speed cap can give the larger horizontal travel a
-  // slightly longer settling tail; compare the settled angles in degrees.
+  // Compare screen-relative axes after applying the horizontal scale.
   assert.ok(Math.abs(portrait.x + landscape.y/MOTION.horizontalScale)*180/Math.PI < .002);
   assert.ok(Math.abs(landscape.x) < 1e-8);
   for (const angle of [-90,90]) {
@@ -90,14 +92,14 @@ test('landscape rotates the axes and turning the screen resets the reference', (
   assert.equal(tilt.base, null);
   assert.equal(degrees(tilt.step(.016, 650)), 0);
 });
-test('wheel interaction freezes the filtered pose until released', () => {
+test('wheel interaction freezes the pose and release uses the newest sensor reading', () => {
   const tilt = calibrated(), before = settle(tilt, 60, 5, 0, 1);
   tilt.push(20, -30, 0, 1616);
   assert.deepEqual(tilt.step(.016, 1616, true), before);
   const after = tilt.step(.016, 1632);
-  assert.ok(Math.hypot(after.x - before.x, after.y - before.y) * 180 / Math.PI <= MOTION.speed * .016 + 1e-8);
+  assert.deepEqual(after,tilt.desired);
 });
-test('invalid readings are ignored; stale data decays to neutral and resumes with calibration', () => {
+test('invalid readings are ignored; stale data returns to neutral and resumes with calibration', () => {
   const tilt = calibrated(); const before = settle(tilt, 65, 5, 0, 1);
   assert.equal(tilt.push(null, null, 0, 1620), false);
   assert.equal(tilt.push(NaN, 0, 0, 1620), false);

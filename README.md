@@ -2,7 +2,7 @@
 
 <p align="center"><img src="docs/branding/pocket-classic-icon.svg" width="128" alt="Pocket Classic 白银色软件图标"></p>
 
-> 当前版本为 **Android 0.7.1 独立测试版**，移除网易云已下载入口，保留本地音乐，并增强机身体感倾斜幅度与响应。见 [离线音乐说明](docs/OFFLINE-MUSIC.md)。下载 [Android 0.7.1 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.7.1)，附 SHA-256 校验文件。
+> 当前版本为 **Android 0.7.2 独立测试版**，移除网易云已下载入口，保留本地音乐，并增强机身体感倾斜幅度与响应。见 [离线音乐说明](docs/OFFLINE-MUSIC.md)。下载 [Android 0.7.2 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.7.2)，附 SHA-256 校验文件。
 
 **把熟悉的转轮和网易云音乐，放进一个口袋播放器。**
 
@@ -12,13 +12,13 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
   <img src="docs/images/pocket-classic.svg" width="900" alt="Pocket Classic 界面示意：经典转轮、每日推荐、私人漫游与渐隐倒影">
 </p>
 
-> 本版保留音质选择、关注歌手浏览、磨砂金属机身与高清 LCD，完善菜单阅读、播放状态和登录提示。登录、歌单、日推、漫游及播放地址解析均由手机直连网易云，无需电脑、局域网服务或配对码。界面资源随安装包提供，音乐通过 Media3 原生后台服务播放，登录状态使用 Android Keystore 加密保存在手机。0.7.1 已完成构建、自动检查与小米真机功能复验；用户确认 LCD 清晰、触感可感知。长期性能与多机型仍待验证。
+> 本版保留音质选择、关注歌手浏览、磨砂金属机身与高清 LCD，完善菜单阅读、播放状态和登录提示。登录、歌单、日推、漫游及播放地址解析均由手机直连网易云，无需电脑、局域网服务或配对码。界面资源随安装包提供，音乐通过 Media3 原生后台服务播放，登录状态使用 Android Keystore 加密保存在手机。0.7.2 已完成构建、自动检查与小米真机功能复验；用户确认 LCD 清晰、触感可感知。长期性能与多机型仍待验证。
 
 ## 安卓独立使用
 
 <p align="center"><img src="docs/images/frosted-silver.png" width="240" alt="冷银摄影棚：磨砂金属、高清 LCD 与柔和倒影"><img src="docs/images/frosted-black.png" width="240" alt="深色磨砂机身与低饱和摄影棚背景"></p>
 
-1. 下载并安装 [Android 0.7.1 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.7.1)。
+1. 下载并安装 [Android 0.7.2 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.7.2)。
 2. 点击底部「连接网易云」，再点击「保存并打开网易云」。
 3. 在网易云「扫一扫 → 相册」选择刚保存的二维码，确认授权后返回播放器。
 4. 进入「音乐」选择喜欢的音乐、我的歌单、每日推荐或私人漫游。离线音乐可直接进入「手机本地音乐」导入，不需要登录。
@@ -49,7 +49,7 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
 
 ## 两个版本的进度
 
-| 功能 | 浏览器开发版 | Android 0.7.1 独立版 |
+| 功能 | 浏览器开发版 | Android 0.7.2 独立版 |
 | --- | --- | --- |
 | iPod 风格菜单、转轮和按键 | 已实现 | 已实现 |
 | 个人歌单、选歌和播放 | 已验证 | 真机账号、歌单曲目及原生播放已验证 |
@@ -61,7 +61,7 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
 | 歌曲专辑封面与专辑名 | 自动读取，失败时显示占位图 | 真机 CDN 下载、原生缩略图及 WebView 解码通过 |
 | 电量和触感 | 取决于浏览器设备接口支持 | 系统实时电量、充电状态及原生马达调用 |
 
-表中的历史记录来自 0.3.4；0.7.1 另在小米 Android 16 真机复验原授权恢复、真实播放、封面、转轮、长按定位、后台播放、体感和横竖屏帮助。视觉参数与对比开关见 [渲染升级](docs/RENDER-UPGRADE.md)。
+表中的历史记录来自 0.3.4；0.7.2 另在小米 Android 16 真机复验原授权恢复、真实播放、封面、转轮、长按定位、后台播放、体感和横竖屏帮助。视觉参数与对比开关见 [渲染升级](docs/RENDER-UPGRADE.md)。
 
 ## 浏览器开发预览（可选）
 
@@ -105,9 +105,9 @@ npm start
 .\Build-Android.ps1
 ```
 
-脚本构建 Debug APK，并运行安卓单元测试与 Lint。安装包生成到 `outputs/Pocket-Classic-0.7.1-debug.apk`，构建产物不会提交到 Git。若已安装网页开发依赖，脚本会先更新安卓界面资源；否则使用仓库中已打包的资源。安装运行不需要 Node.js。
+脚本构建 Debug APK，并运行安卓单元测试与 Lint。安装包生成到 `outputs/Pocket-Classic-0.7.2-debug.apk`，构建产物不会提交到 Git。若已安装网页开发依赖，脚本会先更新安卓界面资源；否则使用仓库中已打包的资源。安装运行不需要 Node.js。
 
-使用方式见上方「安卓独立使用」。0.3.0 起已移除地址和配对码输入；无需 `adb reverse` 或手机网关。安装包见 [Android 0.7.1 独立测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.7.1)，安装时可能需要允许当前来源安装应用。
+使用方式见上方「安卓独立使用」。0.3.0 起已移除地址和配对码输入；无需 `adb reverse` 或手机网关。安装包见 [Android 0.7.2 独立测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.7.2)，安装时可能需要允许当前来源安装应用。
 
 ## 开发与验证
 
