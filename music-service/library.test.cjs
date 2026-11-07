@@ -1,7 +1,19 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {createLibrary,validQuality}=require('./library.cjs');
+const {createLibrary,validQuality,ordinaryPlaylists}=require('./library.cjs');
 const session={cookie:'test-session',authenticated:true};
+
+test('own liked playlist is independent of its name and other users liked playlists remain normal',()=>{
+  const rows=[{id:1,name:'renamed',specialType:5,userId:7},{id:2,name:'喜欢的音乐',specialType:0,userId:7},{id:3,name:'other likes',specialType:5,creator:{userId:8}}];
+  assert.deepEqual(ordinaryPlaylists(rows,7).map(p=>p.id),[2,3]);
+});
+
+test('liked songs paginate in liked order, skip unavailable metadata and fence old sessions',async()=>{
+  const calls=[],s={...session,userId:7};const ids=Array.from({length:102},(_,i)=>102-i);
+  const library=createLibrary({getSession:()=>s,call:async(name,p)=>{calls.push(name);if(name==='likelist')return {body:{code:200,ids}};return {body:{code:200,songs:p.ids.split(',').map(Number).filter(id=>id!==50).reverse().map(id=>({id,name:'Song '+id,ar:[],dt:5000}))}};}});
+  const a=await library.liked(0),b=await library.liked(a.nextOffset);assert.equal(a.tracks[0].id,102);assert.equal(a.nextOffset,100);assert.equal(a.more,true);assert.deepEqual(b.tracks.map(t=>t.id),[2,1]);assert.equal(b.more,false);assert.equal(calls.filter(c=>c==='likelist').length,1);
+  let current=s,finish;const late=createLibrary({getSession:()=>current,call:()=>new Promise(resolve=>finish=resolve)});const pending=late.liked();current={...s,cookie:'new'};finish({body:{code:200,ids:[1]}});await assert.rejects(pending,/账号已变化/);
+});
 test('followed artists use paged subscriptions and return only display data',async()=>{
   const calls=[];const library=createLibrary({getSession:()=>session,call:async(name,params,cookie)=>{calls.push({name,params,cookie});return {body:{code:200,hasMore:true,data:[{id:7,name:'Singer',musicSize:80,private:'hidden'},{id:7,name:'duplicate'},{id:0}]}}}});
   const r=await library.artists(50);assert.deepEqual(r,{artists:[{id:7,name:'Singer',songCount:80}],more:true,nextOffset:53});assert.deepEqual(calls[0],{name:'artist_sublist',params:{limit:50,offset:50},cookie:session.cookie});

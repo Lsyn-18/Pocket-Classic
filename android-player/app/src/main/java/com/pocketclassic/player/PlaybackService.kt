@@ -2,14 +2,11 @@ package com.pocketclassic.player
 
 import android.app.PendingIntent
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.datasource.DefaultHttpDataSource
-import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
@@ -49,14 +46,12 @@ class PlaybackService : MediaSessionService() {
         super.onCreate()
         clearQuality()
         store = MusicSessionStore(this); api = NetEaseApi(store)
-        val factory = ResolvingDataSource.Factory(DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(false)) { spec ->
-            if (spec.uri.scheme != "pocketclassic") throw IOException("不支持此音频来源")
-            val id = spec.uri.lastPathSegment?.toLongOrNull() ?: throw IOException("无效歌曲")
+        val localMusic = LocalMusicLibrary(this)
+        val factory = musicDataSources(this, localMusic, { id ->
             val resource = api.resolve(id)
             if (resolvedQuality.size > 100) resolvedQuality.clear()
-            resolvedQuality[id] = resource.level
-            spec.withUri(Uri.parse(resource.url))
-        }
+            resolvedQuality[id] = resource.level; resource.url
+        })
         val player = ExoPlayer.Builder(this).setMediaSourceFactory(DefaultMediaSourceFactory(factory)).build().apply {
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
             setHandleAudioBecomingNoisy(true)

@@ -11,7 +11,7 @@ function createGateway({ upstream = 'http://127.0.0.1:17863', port = 17864, apkP
   const failures = new Map();
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, 'http://127.0.0.1:17863', 'http://localhost:17863']);
   const local = ip => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(ip);
-  const paths = new Map([['/api/status', 'GET'], ['/api/playlists', 'GET'], ['/api/tracks', 'GET'], ['/api/resolve', 'POST'], ['/api/daily', 'GET'], ['/api/roam', 'GET']]);
+  const paths = new Map([['/api/status', 'GET'], ['/api/playlists', 'GET'], ['/api/tracks', 'GET'], ['/api/resolve', 'POST'], ['/api/daily', 'GET'], ['/api/roam', 'GET'], ['/api/liked', 'GET']]);
   const safeEqual = (a, b) => typeof a === 'string' && a.length === b.length && crypto.timingSafeEqual(Buffer.from(a), Buffer.from(b));
   function currentCode() { if (Date.now() >= expires) { code = String(crypto.randomInt(100000, 1000000)); expires = Date.now() + 600000; } return code; }
   function json(res, value, status = 200, origin) {
@@ -60,6 +60,7 @@ function createGateway({ upstream = 'http://127.0.0.1:17863', port = 17864, apkP
       const token = String(req.headers.authorization || '').replace(/^Bearer /, '');
       if (!sessions.has(token)) return json(res, { error: '连接已失效，请使用电脑上的配对码重新连接' }, 401, origin);
       let route = url.pathname;
+      if (route === '/api/liked') { const offset=url.searchParams.get('offset')??'0';if(!/^(0|[1-9][0-9]{0,4})$/.test(offset))return json(res,{error:'无效分页'},400,origin);route+='?offset='+offset; }
       if (route === '/api/tracks') { const id = url.searchParams.get('id'); if (!/^\d+$/.test(id || '')) return json(res, { error: '无效歌单' }, 400, origin); route += '?id=' + id; }
       const body = req.method === 'POST' ? await readBody(req) : null;
       if (body && !/^\d+$/.test(String(body.id || ''))) return json(res, { error: '无效歌曲' }, 400, origin);

@@ -45,6 +45,7 @@ data class ClassicState(
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private val store = MusicSessionStore(application)
     private val api = NetEaseApi(store)
+    val localMusic = LocalMusicLibrary(application)
     private var loginJob: Job? = null
     private var loginGeneration = 0L
     var state by mutableStateOf(ClassicState(theme = store.theme))
@@ -130,11 +131,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
     fun disconnect() {
         PlaybackService.clearQuality()
-        connectionGeneration++;loginGeneration++;loadGeneration++;loginJob?.cancel();loading?.cancel(); controller?.stop(); controller?.clearMediaItems(); store.clear()
+        connectionGeneration++;loginGeneration++;loadGeneration++;loginJob?.cancel();loading?.cancel(); if (controller?.currentMediaItem?.mediaMetadata?.extras?.getString("mode") != "local") { controller?.stop(); controller?.clearMediaItems() }; store.clear()
         state = ClassicState(message = "已退出网易云音乐", theme = store.theme)
     }
     suspend fun browserApi(route: String): JSONObject {
         if (!NativeContract.allowedApi(route)) throw IOException("不支持此音乐操作")
+        if (route == "local") return withContext(Dispatchers.IO) { localMusic.catalog() }
         val generation = connectionGeneration
         val result = withContext(Dispatchers.IO) { api.browserApi(route) }
         if (generation != connectionGeneration) throw IOException("连接已变化，请重新打开音乐菜单")
@@ -146,14 +148,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         require(tracks.length() in 1..5000) { "播放列表过长或为空" }
         val index = data.getInt("index"); require(index in 0 until tracks.length())
         val mode = data.optString("mode", "playlist"); require(NativeContract.validMode(mode))
-        require(store.read() != null) { "请先登录网易云音乐" }
+        if (mode != "local") require(store.read() != null) { "请先登录网易云音乐" }
         val quality=data.optString("quality",store.quality);require(MusicQuality.valid(quality)) { "无效音质" };store.quality=quality
         val session = UUID.randomUUID().toString()
-        val items = List(tracks.length()) {
-            val track = trackFromJson(tracks.getJSONObject(it))
-            require(track.id > 0 && track.name.length <= 1000 && track.artist.length <= 1000)
+        val items = withContext(Dispatchers.IO) { List(tracks.length()) {
+            val requested = tracks.getJSONObject(it)
+            val track = if (mode == "local") localMusic.track(requested.getLong("id")) else trackFromJson(requested).copy(local = false, origin = "", format = "")
+            require((if (mode == "local") track.id < 0 else track.id > 0) && track.name.length <= 1000 && track.artist.length <= 1000)
             mediaItem(track, mode, session)
-        }
+        } }
         val c = player()
         c.shuffleModeEnabled = mode != "roam" && data.optBoolean("shuffle")
         c.repeatMode = if (mode == "roam") Player.REPEAT_MODE_OFF else data.optInt("repeat").coerceIn(0,2)
@@ -194,7 +197,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .put("repeat", c?.repeatMode ?: 0).put("dark", store.dark).put("haptics", store.haptics)
             .put("quality",store.quality)
             .put("theme",store.theme).put("largeText",store.largeText).put("reducedMotion",store.reducedMotion)
-            .put("actualQuality",if(c?.playbackState==Player.STATE_READY) PlaybackService.qualityFor(item?.mediaId?.toLongOrNull() ?: 0L) else "")
+            .put("actualQuality",if(c?.playbackState==Player.STATE_READY) { if (extra?.getString("mode") == "local") "offline" else PlaybackService.qualityFor(item?.mediaId?.toLongOrNull() ?: 0L) } else "")
             .put("current", item?.let(::trackJson) ?: JSONObject.NULL)
             .put("error", c?.playerError?.cause?.message?.take(140) ?: c?.playerError?.message?.take(140) ?: radioError ?: "")
         if (includeQueue) result.put("tracks", JSONArray().apply { if (c != null) for (i in 0 until c.mediaItemCount) put(trackJson(c.getMediaItemAt(i))) })
@@ -204,12 +207,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 }
 
 fun mediaItem(track: MusicTrack, mode: String, session: String): MediaItem = MediaItem.Builder()
-    .setMediaId(track.id.toString()).setUri("pocketclassic://track/" + track.id)
+    .setMediaId(track.id.toString()).setUri("pocketclassic://" + (if(track.local) "local/" else "track/") + track.id)
     .setMediaMetadata(MediaMetadata.Builder().setTitle(track.name).setArtist(track.artist)
         .setAlbumTitle(track.album).setArtworkUri(ArtworkPolicy.url(track.cover)?.let(Uri::parse))
-        .setExtras(Bundle().apply { putLong("duration", track.durationMs); putString("mode", mode); putString("queueSession", session) }).build()).build()
+        .setExtras(Bundle().apply { putLong("duration", track.durationMs); putString("mode", mode); putString("queueSession", session); putBoolean("local", track.local); putString("origin", track.origin); putString("format", track.format) }).build()).build()
 
 fun trackJson(item: MediaItem): JSONObject = JSONObject().put("id", item.mediaId.toLongOrNull() ?: 0)
     .put("name", item.mediaMetadata.title?.toString() ?: "").put("artist", item.mediaMetadata.artist?.toString() ?: "")
     .put("durationMs", item.mediaMetadata.extras?.getLong("duration") ?: 0)
     .put("cover", item.mediaMetadata.artworkUri?.toString() ?: "").put("album", item.mediaMetadata.albumTitle?.toString() ?: "")
+    .put("local", item.mediaMetadata.extras?.getBoolean("local") ?: false).put("origin", item.mediaMetadata.extras?.getString("origin") ?: "").put("format", item.mediaMetadata.extras?.getString("format") ?: "")

@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { root, call, errorSummary, prepareKey } = require('./bridge.cjs');
 const { createDiscovery, normalizeTracks } = require('./discovery.cjs');
-const {createLibrary}=require('./library.cjs');
+const {createLibrary,ordinaryPlaylists}=require('./library.cjs');
 const PORT = 17863;
 const origin = `http://127.0.0.1:${PORT}`;
 let cookie = '';
@@ -14,7 +14,7 @@ let polling = false;
 let snapshot = { phase: 'idle', authenticated: false, message: '点击生成二维码后，用网易云音乐 App 扫码授权。' };
 let report = { checkedAt: new Date().toISOString(), login: 'pending', replacementSources: false };
 const discovery = createDiscovery({call, getSession: () => ({cookie, authenticated: snapshot.authenticated})});
-const library = createLibrary({call,getSession:()=>({cookie,authenticated:snapshot.authenticated})});
+const library = createLibrary({call,getSession:()=>({cookie,authenticated:snapshot.authenticated,userId:snapshot.userId})});
 const reportPath = path.join(__dirname, 'account-results.json');
 function saveReport() {}
 function send(res, value, status = 200) {
@@ -25,7 +25,7 @@ async function playlists() {
   if (!cookie || !snapshot.userId) throw new Error('请先扫码登录');
   const r = await call('user_playlist', { uid: snapshot.userId, limit: 100 }, cookie);
   if (r.body.code !== 200) throw { body: r.body };
-  return (r.body.playlist || []).map(p => ({ id: p.id, name: p.name, trackCount: p.trackCount, subscribed: p.subscribed }));
+  return ordinaryPlaylists(r.body.playlist || [],snapshot.userId);
 }
 async function tracks(id) {
   const r = await call('playlist_detail', { id }, cookie);
@@ -82,6 +82,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/status') return send(res, { ...snapshot, qrImage });
     if (req.method === 'GET' && url.pathname === '/api/results') return send(res, report);
     if (req.method === 'GET' && url.pathname === '/api/playlists') return send(res, { playlists: await playlists() });
+    if (req.method === 'GET' && url.pathname === '/api/liked') return send(res,await library.liked(url.searchParams.get('offset')??'0'));
     if (req.method === 'GET' && url.pathname === '/api/daily') return send(res, await discovery.daily());
     if (req.method === 'GET' && url.pathname === '/api/roam') return send(res, await discovery.roam());
     if (req.method === 'GET' && url.pathname === '/api/artists') return send(res,await library.artists(url.searchParams.get('offset')??'0'));

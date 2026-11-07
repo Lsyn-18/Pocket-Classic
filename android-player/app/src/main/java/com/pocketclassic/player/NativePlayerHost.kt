@@ -22,7 +22,7 @@ import java.io.ByteArrayInputStream
 @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 class NativePlayerHost(
     private val activity: ComponentActivity, private val vm: PlayerViewModel,
-    private val beforePlay: () -> Unit, private val onError: (String) -> Unit
+    private val beforePlay: () -> Unit, private val localAction: suspend (String, String) -> JSONObject, private val onError: (String) -> Unit
 ) {
     private var ready = false
     private var destroyed = false
@@ -89,6 +89,7 @@ class NativePlayerHost(
                     "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true).put("battery", battery.read()) }
                     "api" -> vm.browserApi(args.getString("route"))
                     "connection" -> { vm.showConnection(); JSONObject() }
+                    "localScan", "localImport", "localFolder" -> localAction(method, args.optString("category", "device"))
                     "queue" -> { beforePlay(); vm.startQueue(args); revision = vm.queueRevision; vm.snapshot(true) }
                     "play", "pause", "next", "previous", "seek", "volume", "configure" -> {
                         if (method == "play") beforePlay()

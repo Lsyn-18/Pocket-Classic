@@ -15,6 +15,12 @@ test('native API requests carry only a route and propagate errors',async()=>{
   assert.deepEqual(message.args,{route:'daily'});f.respond(message,{tracks:[{id:1}]});assert.deepEqual(await result,{tracks:[{id:1}]});
   const failure=f.platform.api('roam');f.respond(f.messages.at(-1),{},'连接已失效');await assert.rejects(failure,/连接已失效/);
 });
+
+test('offline queues send catalog IDs without accepting paths from the page',async()=>{
+  const f=await fixture();const pending=f.platform.playQueue([{id:-7,name:'Local',uri:'file:///untrusted'}],0,'local',{});const message=f.messages.at(-1);assert.deepEqual(message.args.tracks,[{id:-7}]);
+  f.respond(message,{current:{id:-7,local:true},tracks:[{id:-7}],index:0,count:1,mode:'local'});await pending;
+  const importing=f.platform.localAction('localImport','netease');assert.deepEqual(f.messages.at(-1).args,{category:'netease'});f.respond(f.messages.at(-1),{tracks:[]});await importing;
+});
 test('native audio state follows Media3 without generating browser ended events',async()=>{
   const f=await fixture();let ended=0;f.platform.audio.addEventListener('ended',()=>ended++);
   f.platform.receive({type:'playback',value:{playing:true,ready:true,positionMs:12345,durationMs:120000,volume:.4,count:3,index:1}});

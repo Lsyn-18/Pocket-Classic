@@ -13,6 +13,9 @@ data class LoginPoll(val code: Int, val session: MusicSession? = null)
 class NetEaseApi(private val store: MusicSessionStore) {
     private data class Response(val body: JSONObject,val cookies: Map<String,String>)
     private val device=store.deviceId
+    private var likedSession = ""
+    private var likedAt = 0L
+    private var likedIds = emptyList<Long>()
     private fun request(path: String, data: JSONObject=JSONObject(), cookie: String=""): Response {
         require(path.startsWith("/api/") && !path.contains('?') && !path.contains(".."))
         val cookies=linkedMapOf("os" to "pc","appver" to "3.1.17.204416","__remember_me" to "true","_ntes_nuid" to device)
@@ -85,9 +88,26 @@ class NetEaseApi(private val store: MusicSessionStore) {
         return result
     }
     fun browserApi(route: String): JSONObject {
-        require(NativeContract.allowedApi(route))
+        require(NativeContract.allowedApi(route) && route != "local")
         if(route=="status")return status()
         val session=current();val result=when {
+            route.startsWith("liked?offset=") -> {
+                val now = android.os.SystemClock.elapsedRealtime()
+                if (likedSession != session.id || now - likedAt > 60_000) {
+                    val body = checked(request("/api/song/like/get", JSONObject().put("uid", session.userId), session.cookie))
+                    val ids = body.optJSONArray("ids") ?: throw IOException("喜欢的音乐列表暂时无法读取")
+                    likedIds = (0 until ids.length()).map { ids.optLong(it) }.filter { it > 0 }.distinct().take(100000)
+                    ensureSession(session); likedSession = session.id; likedAt = now
+                }
+                val offset = route.substringAfter("offset=").toInt(); val ids = likedIds.drop(offset).take(100)
+                val tracks = if (ids.isEmpty()) JSONArray() else {
+                    val data = JSONObject().put("c", JSONArray(ids.map { JSONObject().put("id", it) }).toString())
+                    val songs = normalize(checked(request("/api/v3/song/detail", data, session.cookie)).optJSONArray("songs") ?: JSONArray())
+                    val byId = (0 until songs.length()).map { songs.getJSONObject(it) }.associateBy { it.getLong("id") }
+                    JSONArray(ids.mapNotNull { byId[it] })
+                }
+                JSONObject().put("tracks", tracks).put("trackCount", likedIds.size).put("nextOffset", offset + ids.size).put("more", offset + ids.size < likedIds.size)
+            }
             route.startsWith("artists?offset=") -> {
                 val offset=route.substringAfter("offset=").toInt()
                 val body=checked(request("/api/artist/sublist",JSONObject().put("offset",offset).put("limit",50).put("total",true),session.cookie))
@@ -108,7 +128,10 @@ class NetEaseApi(private val store: MusicSessionStore) {
             route=="playlists" -> {
                 val body=checked(request("/api/user/playlist",JSONObject().put("uid",session.userId).put("limit",100).put("offset",0).put("includeVideo",true),session.cookie))
                 val list=body.optJSONArray("playlist")?:JSONArray();val output=JSONArray()
-                for(i in 0 until list.length())list.optJSONObject(i)?.let { output.put(JSONObject().put("id",it.optLong("id")).put("name",it.optString("name")).put("trackCount",it.optInt("trackCount"))) }
+                for(i in 0 until list.length())list.optJSONObject(i)?.let {
+                    val owner = it.optLong("userId", it.optJSONObject("creator")?.optLong("userId") ?: 0L)
+                    if (!isOwnLikedPlaylist(it.optInt("specialType"), owner, session.userId)) output.put(JSONObject().put("id",it.optLong("id")).put("name",it.optString("name")).put("trackCount",it.optInt("trackCount")))
+                }
                 JSONObject().put("playlists",output)
             }
             route.startsWith("tracks?id=") -> {

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import {createArtworkStore} from './artwork.mjs';
 import {drawBattery} from './battery.mjs';
 import {visualBaseline} from './visual-profile.mjs';
-import {menuMarker,listWindow,previewContent,emptyContent,qualityLabel,canAdvance} from './presentation.mjs';
+import {menuMarker,listWindow,previewContent,emptyContent,qualityLabel,canAdvance,playbackGlyph} from './presentation.mjs';
 
 const FONT='"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif';
 export function makeScreen(app,{pixelScale=4,maxAnisotropy=1,baseline=visualBaseline}={}) {
@@ -48,11 +48,11 @@ export function makeScreen(app,{pixelScale=4,maxAnisotropy=1,baseline=visualBase
     if(s.sleep){texture.needsUpdate=true;return;}
     const head=c.createLinearGradient(0,0,0,24);head.addColorStop(0,'#f9fbfc');head.addColorStop(1,'#d6dee7');c.fillStyle=head;c.fillRect(0,0,320,24);c.fillStyle='#b3bfcc';c.fillRect(0,23,320,1);
     text(s.title,8,12,208,14,'#202c38',600);if(s.hold)text('HOLD',221,12,35,9,'#475b6c',600);
-    if(a&&!a.paused&&!neutral){c.fillStyle='#246ab4';c.beginPath();c.moveTo(265,7);c.lineTo(273,12);c.lineTo(265,17);c.closePath();c.fill();}drawBattery(c,s.battery);
+    const glyph=!neutral&&playbackGlyph(s.current,a?.paused);if(glyph){c.fillStyle='#246ab4';if(glyph==='pause'){c.fillRect(265,7,3,10);c.fillRect(270,7,3,10);}else{c.beginPath();c.moveTo(265,7);c.lineTo(273,12);c.lineTo(265,17);c.closePath();c.fill();}}drawBattery(c,s.battery);
     if(s.page==='playing'&&s.current){
       const t=s.current;album(12,38,90,t);text(t.name,114,51,194,s.largeText?17:15,'#172b3e',600,true);text(t.artist,114,76,194,13,'#40576c');text(t.album||'未知专辑',114,98,194,11,'#53677c');
       const status=s.seeking?(s.seeking>0?'快进 ››':'‹‹ 快退'):s.buffering?'正在缓冲…':s.trial?'试听片段':a.paused?'已暂停':'正在播放';
-      text(status,114,120,90,11,'#275783',500);text(s.actualQuality?qualityLabel(s.actualQuality):'按权限提供',223,120,85,10,'#52677a');
+      text(status,114,120,90,11,'#275783',500);text(s.queueMode==='local'?'离线 · '+(t.format||'本地'):s.actualQuality?qualityLabel(s.actualQuality):'按权限提供',210,120,98,10,'#52677a');
       const duration=Number.isFinite(a.duration)?a.duration:t.durationMs/1000,progress=Math.max(0,Math.min(1,(a.currentTime||0)/Math.max(1,duration))),seek=s.mode==='seek';
       c.fillStyle='#c5d2df';c.fillRect(14,162,292,3);c.fillStyle=seek||s.seeking?'#125dae':'#2874b9';c.fillRect(14,162,292*progress,3);
       text(app.format(a.currentTime),14,181,110,11);text('−'+app.format(duration-a.currentTime),254,181,54,11);

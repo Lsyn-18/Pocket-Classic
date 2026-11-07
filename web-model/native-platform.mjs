@@ -4,7 +4,7 @@ export function createNativePlatform(transport, host = window) {
   function request(method,args={}) {
     const id=++sequence;
     return new Promise((resolve,reject)=>{
-      const timer=host.setTimeout(()=>{pending.delete(id);reject(Error('手机服务响应超时，请重试'));},45000);
+      const timer=host.setTimeout(()=>{pending.delete(id);reject(Error('手机服务响应超时，请重试'));},['localScan','localImport','localFolder'].includes(method)?600000:45000);
       pending.set(id,{resolve,reject,timer});
       try{const message=JSON.stringify({id,method,args});if(message.length>1_900_000)throw Error('歌单过大，请选择较小的歌单');transport.postMessage(message);}catch(error){host.clearTimeout(timer);pending.delete(id);reject(error);}
     });
@@ -51,9 +51,10 @@ export function createNativePlatform(transport, host = window) {
   const platform={
     audio,request,get transitioning(){return transitioning;},beginTransition(){resetSeek();transitioning=true;},
     api:route=>request('api',{route}),openConnection:()=>request('connection'),
+    localAction:(method,category)=>request(method,{category}),
     async playQueue(tracks,index,mode,options){
       resetSeek();transitioning=true;
-      try{const value=await request('queue',{tracks,index,mode,...options});transitioning=false;snapshot(value);}
+      try{const value=await request('queue',{tracks:mode==='local'?tracks.map(t=>({id:t.id})):tracks,index,mode,...options});transitioning=false;snapshot(value);}
       catch(error){transitioning=false;throw error;}
     },
     next:()=>request('next'),previous:()=>request('previous'),configure:options=>fire('configure',options),

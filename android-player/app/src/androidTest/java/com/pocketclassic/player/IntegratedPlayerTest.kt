@@ -129,6 +129,8 @@ class IntegratedPlayerTest {
             step("Native touch and wheel navigation passed")
             if(!authenticated)return
             ready("window.PocketClassicContext.state.connected")
+            repeat(3) { turnOneStep(); Thread.sleep(120) }
+            ready("window.PocketClassicContext.entries()[window.PocketClassicContext.state.selected].id==='daily'")
             tap("中央选择键");ready("window.PocketClassicContext.state.page==='tracks'&&!window.PocketClassicContext.state.busy&&window.PocketClassicContext.state.tracks.length>0")
             tap("中央选择键");ready("window.PocketClassicContext.state.queueMode==='daily'&&window.PocketClassicContext.audio.readyState===4&&!window.PocketClassicContext.audio.paused",45)
             step("Daily recommendation decoded by the native player")
@@ -139,7 +141,7 @@ class IntegratedPlayerTest {
             instrumentation.uiAutomation.takeScreenshot().also { bitmap -> File(context.filesDir,"pocketclassic-android.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG,100,it) };bitmap.recycle() }
             tap("播放暂停，长按休眠");ready("window.PocketClassicContext.audio.paused")
             tap("MENU，长按返回主页");tap("MENU，长按返回主页");ready("window.PocketClassicContext.state.page==='music'")
-            turnOneStep();ready("window.PocketClassicContext.state.selected===2")
+            turnOneStep();ready("window.PocketClassicContext.entries()[window.PocketClassicContext.state.selected].id==='roam'")
             tap("中央选择键");ready("window.PocketClassicContext.state.queueMode==='roam'&&window.PocketClassicContext.audio.readyState===4&&!window.PocketClassicContext.audio.paused",45)
             val initialCount=js("window.PocketClassicContext.state.queue.length").toInt()
             tap("下一曲，长按快进");ready("window.PocketClassicContext.state.queueIndex===1")

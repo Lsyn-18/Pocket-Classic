@@ -1,4 +1,5 @@
 export function menuMarker(page,item,index,state) {
+  if(page==='local')return item.localAction?(item.localAction==='localScan'?'↻':'＋'):item.id===state.current?.id?'▶':'';
   if(page==='quality')return item.id===state.quality?'✓':'';
   if(page==='tracks'||page==='queue')return item.more?'＋':item.id===state.current?.id?'▶':'';
   if(page==='appearance')return index===0?'↻':(index===1?state.largeText:state.reducedMotion)?'开':'关';
@@ -24,7 +25,8 @@ export function emptyContent(page) {
   return ['这里还没有歌曲','按 MENU 返回，换个列表看看'];
 }
 export function qualityLabel(value) {
-  return ({standard:'标准',higher:'较高',exhigh:'极高',lossless:'无损',hires:'Hi-Res',jyeffect:'高清环绕',sky:'沉浸环绕',jymaster:'超清母带'})[value]||'';
+  return ({offline:'离线播放',standard:'标准',higher:'较高',exhigh:'极高',lossless:'无损',hires:'Hi-Res',jyeffect:'高清环绕',sky:'沉浸环绕',jymaster:'超清母带'})[value]||'';
 }
 export function appearanceIsDark(theme,systemDark) { return theme==='dark'||theme==='auto'&&systemDark; }
+export function playbackGlyph(current,paused){return current?(paused?'play':'pause'):'';}
 export function canAdvance(state) { return !!state.current&&!!((state.queueIndex||0)+1<(state.queue?.length||0)||state.queueMode==='roam'||state.repeat===2||state.shuffle&&(state.queue?.length||0)>1); }

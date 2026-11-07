@@ -85,8 +85,9 @@ class MainActivity : ComponentActivity() {
             else WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
         val vm = ViewModelProvider(this)[PlayerViewModel::class.java]
+        val localMusic = LocalMusicAccess(this, vm.localMusic)
         var error by mutableStateOf("")
-        playerHost = NativePlayerHost(this, vm, ::notificationPermission) { error = it }
+        playerHost = NativePlayerHost(this, vm, ::notificationPermission, localMusic::perform) { error = it }
         onBackPressedDispatcher.addCallback(this) {
             if (vm.state.showConnection) vm.showConnection(false) else playerHost.back()
         }
