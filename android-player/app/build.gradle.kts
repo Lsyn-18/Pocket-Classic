@@ -2,7 +2,7 @@ plugins { id("com.android.application"); id("org.jetbrains.kotlin.android"); id(
 android {
     namespace = "com.pocketclassic.player"
     compileSdk = 35
-    defaultConfig { applicationId = "com.pocketclassic.player"; minSdk = 26; targetSdk = 35; versionCode = 11; versionName = "0.6.1"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
+    defaultConfig { applicationId = "com.pocketclassic.player"; minSdk = 26; targetSdk = 35; versionCode = 12; versionName = "0.6.2"; testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner" }
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = "17" }
