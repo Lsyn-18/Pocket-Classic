@@ -37,10 +37,20 @@ test('a 15 degree physical tilt gives a restrained 1.44 degree model tilt', () =
   const pose = settle(calibrated(), 60, 5);
   assert.ok(Math.abs(degrees(pose) - 1.44) < .002);
 });
-test('large diagonal movement stays inside the combined 2.2 degree limit', () => {
+test('horizontal movement has a little more travel while vertical motion stays restrained', () => {
+  const pose = settle(calibrated(), 45, 20);
+  assert.ok(Math.abs(pose.y * 180 / Math.PI - 1.8) < .002);
+  assert.ok(Math.abs(pose.x) < 1e-10);
+  for (const gamma of [-80, 80]) {
+    const extreme = settle(calibrated(), 45, gamma);
+    assert.ok(Math.abs(Math.abs(extreme.y) * 180 / Math.PI - 2.75) < .002);
+  }
+});
+test('large diagonal movement stays inside the horizontal-expanded tilt envelope', () => {
   const pose = settle(calibrated(), 140, 80);
-  assert.ok(degrees(pose) <= MOTION.maxTilt + 1e-10);
-  assert.ok(degrees(pose) > 2.19);
+  assert.ok(Math.hypot(pose.x,pose.y/MOTION.horizontalScale)*180/Math.PI <= MOTION.maxTilt + 1e-10);
+  assert.ok(degrees(pose) <= MOTION.maxTilt*MOTION.horizontalScale + 1e-10);
+  assert.ok(degrees(pose) > MOTION.maxTilt);
 });
 test('sudden sensor spike is rate limited, then settles without persistent drift', () => {
   const tilt = calibrated();
@@ -61,8 +71,16 @@ test('beta wrap through 180 degrees does not cause a full turn', () => {
 test('landscape rotates the axes and turning the screen resets the reference', () => {
   const portrait = settle(calibrated(45, 0, 0), 60, 0, 0);
   const landscape = settle(calibrated(45, 0, 90), 60, 0, 90);
-  assert.ok(Math.abs(portrait.x + landscape.y) < 1e-8);
+  // The shared angular speed cap can give the larger horizontal travel a
+  // slightly longer settling tail; compare the settled angles in degrees.
+  assert.ok(Math.abs(portrait.x + landscape.y/MOTION.horizontalScale)*180/Math.PI < .002);
   assert.ok(Math.abs(landscape.x) < 1e-8);
+  for (const angle of [-90,90]) {
+    const horizontal=settle(calibrated(45,0,angle),60,0,angle);
+    const vertical=settle(calibrated(45,0,angle),45,15,angle);
+    assert.ok(Math.abs(Math.abs(horizontal.y)*180/Math.PI-1.8)<.002);
+    assert.ok(Math.abs(Math.abs(vertical.x)*180/Math.PI-1.44)<.002);
+  }
   const tilt = calibrated(); tilt.push(45, 5, 90, 650);
   assert.equal(tilt.base, null);
   assert.equal(degrees(tilt.step(.016, 650)), 0);
