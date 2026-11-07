@@ -28,7 +28,7 @@ scene.add(new THREE.HemisphereLight(0xffffff,0xaaaaaa,.4));
 const key=new THREE.DirectionalLight(0xffffff,.8);key.position.set(-4,7,12);scene.add(key);
 const fill=new THREE.DirectionalLight(0xffffff,.35);fill.position.set(7,-1,5);scene.add(fill);
 RectAreaLightUniformsLib.init();
-const studioCard=new THREE.RectAreaLight(0xffffff,visualBaseline?12:5.5,visualBaseline?1.8:4.5,visualBaseline?12:8);studioCard.position.set(...(visualBaseline?[-2.8,1.5,6]:[-3.8,4.2,8]));studioCard.lookAt(0,0,0);scene.add(studioCard);
+const studioCard=new THREE.RectAreaLight(0xffffff,visualBaseline?12:7.5,visualBaseline?1.8:1.4,visualBaseline?12:11);studioCard.position.set(...(visualBaseline?[-2.8,1.5,6]:[-2.2,2,5]));studioCard.lookAt(0,0,0);scene.add(studioCard);
 const rimLight=new THREE.RectAreaLight(0xffead1,visualBaseline?0:1.6,3,7);rimLight.position.set(5,2,6);rimLight.lookAt(0,0,0);if(!visualBaseline)scene.add(rimLight);
 const screen=makeScreen(app,{...quality,baseline:visualBaseline}),classic=createClassic(screen.texture,{baseline:visualBaseline});scene.add(classic.model);
 // Composite the original high-resolution canvas at the display's native DPR.
@@ -118,7 +118,7 @@ function frame(now){const dt=Math.min(.05,(now-previous)/1000);previous=now;cons
   if(!gesture){const follow=usingSensor?1:ease;classic.model.rotation.x+=(x-classic.model.rotation.x)*follow;classic.model.rotation.y+=(y-classic.model.rotation.y)*follow}
   classic.model.updateMatrixWorld(true);classic.setDark(app.state.dark);classic.setHold(app.state.hold);screen.draw();
   if(!visualBaseline){const r=host.getBoundingClientRect(),project=(x,y)=>{const p=classic.model.localToWorld(new THREE.Vector3(x,y,.530)).project(camera);return {x:(p.x*.5+.5)*r.width,y:(-p.y*.5+.5)*r.height};},tl=project(-D.screenWidth/2,D.screenY+D.screenHeight/2),tr=project(D.screenWidth/2,D.screenY+D.screenHeight/2),bl=project(-D.screenWidth/2,D.screenY-D.screenHeight/2);screen.canvas.style.transform=`matrix(${(tr.x-tl.x)/320},${(tr.y-tl.y)/320},${(bl.x-tl.x)/240},${(bl.y-tl.y)/240},${tl.x},${tl.y})`;}
-  if(!visualBaseline){studioCard.position.x=-3.8+(classic.model.rotation.y+.025)*7;studioCard.position.y=4.2+(classic.model.rotation.x+.008)*5;studioCard.lookAt(0,0,0);}
+  if(!visualBaseline){studioCard.position.x=-2.2+(classic.model.rotation.y+.025)*2;studioCard.position.y=2+(classic.model.rotation.x+.008)*1.5;studioCard.lookAt(0,0,0);}
   const environmentDark=document.body.classList.contains('dark');
   document.body.classList.toggle('is-playing',!app.audio.paused&&!app.state.sleep);
   atmosphere.update(dt,{dark:environmentDark,trackId:app.state.current?.id||0,playing:!app.audio.paused,tiltX:classic.model.rotation.x+.008,tiltY:classic.model.rotation.y+.025,reducedMotion:reduce});

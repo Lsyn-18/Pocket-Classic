@@ -33,10 +33,10 @@ function aluminumColorTexture(frosted=false) {
   const w=512,h=1024,data=new Uint8Array(w*h*4);let seed=87;
   for(let y=0;y<h;y++)for(let x=0;x<w;x++){
     seed=(1664525*seed+1013904223)>>>0;
-    const v=y/(h-1),base=frosted?211+3*v+2*Math.sin(v*Math.PI):190+10*v+6*Math.sin(v*Math.PI),noise=((seed>>>24)/255-.5)*(frosted?1.5:2.5);
+    const v=y/(h-1),line=Math.sin(y*17.317)*Math.sin(y*3.173),base=frosted?195+10*v+4*Math.sin(v*Math.PI)+line*3.2:190+10*v+6*Math.sin(v*Math.PI),noise=((seed>>>24)/255-.5)*(frosted?1.8:2.5);
     const i=(y*w+x)*4;data[i]=data[i+1]=data[i+2]=base+noise;data[i+3]=255;
   }
-  const texture=new THREE.DataTexture(data,w,h,THREE.RGBAFormat);texture.colorSpace=THREE.SRGBColorSpace;texture.needsUpdate=true;return texture;
+  const texture=new THREE.DataTexture(data,w,h,THREE.RGBAFormat);texture.colorSpace=THREE.SRGBColorSpace;texture.magFilter=THREE.LinearFilter;texture.minFilter=THREE.LinearMipmapLinearFilter;texture.generateMipmaps=true;texture.anisotropy=4;texture.needsUpdate=true;return texture;
 }
 
 function frostedTextures(){
@@ -71,9 +71,9 @@ function canvasTexture(w, h, draw) {
   texture.anisotropy = 4; return texture;
 }
 
-function wheelPrinting(dark) {
+function wheelPrinting() {
   return canvasTexture(1024, 1024, (c, w) => {
-    c.fillStyle = dark ? '#eef0f3' : '#697783'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = '#ffffff'; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.font = '54px Arial'; c.fillText('MENU', 512, 101);
     const tri = (x, y, reverse = false) => { c.beginPath(); c.moveTo(x + (reverse ? 20 : 0), y - 14); c.lineTo(x + (reverse ? 0 : 20), y); c.lineTo(x + (reverse ? 20 : 0), y + 14); c.closePath(); c.fill(); };
     c.fillRect(96, 497, 7, 30); tri(104, 512, true); tri(126, 512, true);
@@ -111,14 +111,19 @@ export function createClassic(screenTexture,{baseline=visualBaseline}={}) {
     bezel: new THREE.MeshPhysicalMaterial({ color: '#1b2028', roughness: .22, metalness: .42, clearcoat: .65 }),
     glass: new THREE.MeshPhysicalMaterial({ color: '#ffffff', metalness: 1, roughness: .035, transparent:true, opacity:.045, depthWrite:false, clearcoat: .1 }),
     gold: new THREE.MeshStandardMaterial({ color: '#b5a66c', roughness: .45, metalness: .9 }),
+    wheelRecess: new THREE.MeshStandardMaterial({color:'#b7bdc3',roughness:.7,metalness:.15}),
+    wheelSeam: new THREE.MeshStandardMaterial({color:'#78828e',metalness:.5,roughness:.5}),
   };
   if(!baseline){
-    Object.assign(materials.front,{metalness:.96,roughness:.46,clearcoat:.015,anisotropy:.025,envMapIntensity:1.15,bumpMap:null,roughnessMap:frost.roughness,normalMap:frost.normal,normalScale:new THREE.Vector2(.08,.08)});
-    Object.assign(materials.center,{color:new THREE.Color('#bdc3cb'),metalness:.93,roughness:.44,anisotropy:.02,bumpMap:null,roughnessMap:frost.roughness,normalMap:frost.normal,normalScale:new THREE.Vector2(.07,.07)});
-    Object.assign(materials.wheel,{metalness:0,roughness:.70});
+    Object.assign(materials.front,{metalness:.96,roughness:.34,clearcoat:0,anisotropy:.38,envMapIntensity:1.0,bumpMap:null,roughnessMap:frost.roughness,normalMap:frost.normal,normalScale:new THREE.Vector2(.035,.035)});
+    Object.assign(materials.center,{metalness:.96,roughness:.30,envMapIntensity:1.0,anisotropy:.28,bumpMap:null,roughnessMap:frost.roughness,normalMap:frost.normal,normalScale:new THREE.Vector2(.025,.025)});
+    Object.assign(materials.wheel,{metalness:0,roughness:.64,envMapIntensity:.40});
+    Object.assign(materials.wheelRecess,{roughness:.84,metalness:0,envMapIntensity:.55});
+    Object.assign(materials.wheelSeam,{roughness:.80,metalness:.05,envMapIntensity:.55});
     Object.assign(materials.bezel,{roughness:.32,metalness:.55,clearcoat:.08});
     Object.assign(materials.glass,{metalness:0,roughness:.09,opacity:.035,clearcoat:.48,clearcoatRoughness:.10});
-    materials.wheelLip=new THREE.MeshStandardMaterial({color:'#b6bfc9',metalness:.35,roughness:.62});
+    materials.wheelLip=new THREE.MeshStandardMaterial({color:'#b6bfc9',metalness:.10,roughness:.76,envMapIntensity:.65});
+    materials.wheelInnerLip=materials.wheelLip.clone();
   }
   // A soft satin edge keeps the slim rolled lip from reading as a dark sidewall.
   // The white click wheel stays matte so the two materials read separately.
@@ -167,7 +172,9 @@ export function createClassic(screenTexture,{baseline=visualBaseline}={}) {
   const faceGeometry=extrude(face,.022,0),facePositions=faceGeometry.attributes.position,faceUv=[];
   for(let i=0;i<facePositions.count;i++)faceUv.push((facePositions.getX(i)+3.09)/6.18,(facePositions.getY(i)+5.175)/10.35);
   faceGeometry.setAttribute('uv',new THREE.Float32BufferAttribute(faceUv,2));
-  add('Flat_anodized_face_with_cutouts', faceGeometry, materials.front, [0,0,.503], 'case');
+  // Extrude group 1 is the cutout wall. A reflective face material on this
+  // subpixel wall produces bright crawling rims around the dark click wheel.
+  add('Flat_anodized_face_with_cutouts', faceGeometry, baseline?materials.front:[materials.front,materials.wheelRecess], [0,0,.503], 'case');
   // Keep the visible front roll narrow: a broad dark rim exaggerates thickness.
   // Construct that surface separately so the display and wheel openings keep
   // their tight, machined edges rather than acquiring the outer bevel radius.
@@ -189,7 +196,9 @@ export function createClassic(screenTexture,{baseline=visualBaseline}={}) {
   lcd.userData.lcd = true; lcd.castShadow = false;
   const glass = solid('Separate_display_glass', 5.15, 3.875, .045, .022, .005, materials.glass, [0,dimensions.screenY,.514], 'screen');
   glass.castShadow = false; glass.renderOrder = 2;
-  cylinder('Click_wheel_recess', 1.938, .11, new THREE.MeshStandardMaterial({color:'#b7bdc3',roughness:.7,metalness:.15}), 0, dimensions.wheelY, .428, 'wheel');
+  // Extend the well behind the 1.945 opening, including tilt parallax. Leaving
+  // a gap here exposes the polished rear shell as a flickering chrome hairline.
+  cylinder('Click_wheel_recess', baseline?1.938:1.97, .11, materials.wheelRecess, 0, dimensions.wheelY, .428, 'wheel');
   const ring = add('Capacitive_click_wheel_ring', baseline?new THREE.RingGeometry(.704,1.916,160):annularSurface([[.704,0],[.92,-.006],[1.52,-.004],[1.916,0]]), materials.wheel, [0,dimensions.wheelY,.506], 'wheel');
   ring.castShadow = false;
   const center = cylinder('Independent_center_button', .693, .042, materials.center, 0, dimensions.wheelY, .493, 'wheel');
@@ -198,8 +207,8 @@ export function createClassic(screenTexture,{baseline=visualBaseline}={}) {
     const p=center.geometry.attributes.position,uv=center.geometry.attributes.uv;
     for(let i=0;i<p.count;i++)uv.setXY(i,p.getX(i)/1.386+.5,p.getY(i)/1.386+.5);uv.needsUpdate=true;
   }
-  const seam = add('Center_button_seam', new THREE.RingGeometry(.693,.704,128), new THREE.MeshStandardMaterial({color:'#78828e',metalness:.5,roughness:.5}), [0,dimensions.wheelY,.507], 'wheel'); seam.castShadow = false;
-  const printMaterial = new THREE.MeshBasicMaterial({ map: wheelPrinting(false), transparent: true, depthWrite: false, toneMapped:false });
+  const seam = add('Center_button_seam', new THREE.RingGeometry(.693,.704,128), materials.wheelSeam, [0,dimensions.wheelY,.507], 'wheel'); seam.castShadow = false;
+  const printMaterial = new THREE.MeshBasicMaterial({ map: wheelPrinting(), color:'#697783', transparent: true, depthWrite: false, toneMapped:false });
   const printing = add('Printed_click_wheel_symbols', new THREE.PlaneGeometry(3.832,3.832), printMaterial, [0,dimensions.wheelY,.509], 'wheel'); printing.castShadow = false;
   const port = add('Headphone_socket_rim', new THREE.TorusGeometry(.177,.026,12,64), materials.steel, [-2.02,5.172,-.08], 'case'); port.rotation.x = -Math.PI / 2;
   const socket = new THREE.CylinderGeometry(.151,.151,.19,48);
@@ -216,8 +225,8 @@ export function createClassic(screenTexture,{baseline=visualBaseline}={}) {
     decoration('Display_inner_glass_edge',frameGeometry(5.18,3.905,.055,.012),trim,[0,dimensions.screenY,.527]);
     decoration('Display_top_glass_glint',new THREE.PlaneGeometry(5.03,.007),edge,[0,dimensions.screenY+1.902,.528]);
     decoration('Fine_front_panel_seam',frameGeometry(5.995,10.165,.457,.008),materials.frontRim,[0,0,.526]);
-    decoration('Wheel_rounded_outer_lip',new THREE.TorusGeometry(1.927,.009,5,92),materials.wheelLip,[0,dimensions.wheelY,.497]);
-    decoration('Wheel_inner_satin_lip',new THREE.RingGeometry(.707,.715,96),materials.frontRim,[0,dimensions.wheelY,.507]);
+    decoration('Wheel_rounded_outer_lip',new THREE.TorusGeometry(1.927,.012,5,92),materials.wheelLip,[0,dimensions.wheelY,.497]);
+    decoration('Wheel_inner_satin_lip',new THREE.RingGeometry(.707,.715,96),materials.wheelInnerLip,[0,dimensions.wheelY,.507]);
     decoration('Headphone_inner_bevel',new THREE.TorusGeometry(.158,.009,4,32),trim,[-2.02,5.179,-.08],[-Math.PI/2,0,0]);
     for(const z of [-.043,.043]){const mesh=decoration('Hold_slider_grip_'+z,new THREE.BoxGeometry(.23,.003,.006),groove,[0,.039,z]);model.remove(mesh);holdSlider.add(mesh);}
     const label=canvasTexture(256,64,c=>{c.fillStyle='#77828c';c.textAlign='center';c.textBaseline='middle';c.font='26px Arial';c.fillText('HOLD',128,32);});
@@ -233,17 +242,25 @@ export function createClassic(screenTexture,{baseline=visualBaseline}={}) {
   }
   const engraving = new THREE.MeshStandardMaterial({ map: engravingTexture(), transparent:true, opacity:.42, metalness:.65, roughness:.53, depthWrite:false });
   const backMark = add('Rear_laser_engraving', new THREE.PlaneGeometry(4.9,7.35), engraving, [0,.05,-.527]); backMark.rotation.y = Math.PI; backMark.castShadow = false;
-  let dark = false;
+  let dark = null;
   function setDark(value) {
     if (dark === value) return; dark = value;
-    for(const [material,silverRoughness] of [[materials.front,baseline?.30:.46],[materials.frontRim,baseline?.36:.23]]){
-      material.map=value?null:silverCoat;material.color.set(value?(baseline?'#30343a':'#303236'):'#ffffff');material.roughness=value?(baseline?.40:material===materials.front?.52:.27):silverRoughness;
-      if(!baseline)material.metalness=material===materials.front?(value?.91:.96):.95;material.needsUpdate=true;
+    if(baseline){
+      for(const [material,silverRoughness]of [[materials.front,.30],[materials.frontRim,.36]]){material.map=value?null:silverCoat;material.color.set(value?'#30343a':'#ffffff');material.roughness=value?.40:silverRoughness;material.needsUpdate=true;}
+      materials.wheel.color.set(value?'#20242b':'#e8edf1');materials.center.color.set(value?'#343b45':'#a5a6a9');
+    }else{
+      // Keep the coating and shader layout stable; only uniforms change finish.
+      materials.front.color.set(value?'#393b3e':'#aab5c0');materials.front.roughness=value?.35:.30;materials.front.metalness=.96;
+      materials.frontRim.color.set(value?'#393b3e':'#c8d1db');materials.frontRim.roughness=value?.30:.23;
+      materials.wheel.color.set(value?'#08090b':'#e8ebed');materials.wheel.roughness=.64;
+      materials.center.color.set(value?'#5d6268':'#bbc6d0');materials.center.roughness=value?.34:.30;materials.center.metalness=value?.92:.96;
+      materials.wheelRecess.color.set(value?'#080a0d':'#b4bdc6');materials.wheelSeam.color.set(value?'#12151a':'#99a5b0');
+      materials.wheelLip.color.set(value?'#272c32':'#b3bec9');materials.wheelInnerLip.color.set(value?'#242a30':'#b0bbc6');
     }
-    materials.wheel.color.set(value?(baseline?'#20242b':'#181a1e'):'#e8edf1'); materials.center.color.set(value?(baseline?'#343b45':'#34373d'):(baseline?'#a5a6a9':'#bdc3cb'));
-    materials.wheelLip?.color.set(value?'#393d43':'#aeb9c3');
-    printMaterial.map.dispose(); printMaterial.map = wheelPrinting(value); printMaterial.needsUpdate=true;
+    // A single white glyph atlas can be tinted without upload/dispose flashes.
+    printMaterial.color.set(value?'#c5ccd3':'#697783');
   }
+  setDark(false);
   function setHold(value) { holdSlider.position.x = value ? 2.12 : 1.79; orange.visible = value; }
   setHold(false);
   return { model, parts, materials, lcd, center, setDark, setHold };

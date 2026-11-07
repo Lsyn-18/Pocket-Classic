@@ -72,9 +72,46 @@ test('decorations stay outside picking and total model triangles stay within twe
 test('frosted roughness is not accidentally multiplied into a polished surface',()=>{
   const classic=createClassic(new THREE.Texture(),{baseline:false}),front=classic.materials.front;
   const pixels=front.roughnessMap.image.data,levels=[];for(let i=1;i<pixels.length;i+=4)levels.push(pixels[i]/255*front.roughness);
-  assert.ok(Math.min(...levels)>=.38);assert.ok(Math.max(...levels)<=.48);assert.ok(front.metalness>=.94);assert.ok(front.clearcoat<=.05);
-  classic.setDark(true);assert.ok(front.roughness>=.42&&front.roughness<=.55);assert.ok(front.metalness>=.88);
+  assert.ok(Math.min(...levels)>=.26);assert.ok(Math.max(...levels)<=.38);assert.ok(front.metalness>=.94);assert.ok(front.clearcoat<=.05);
+  assert.equal(front.map.generateMipmaps,true);assert.equal(front.map.minFilter,THREE.LinearMipmapLinearFilter);
+  assert.ok(front.anisotropy>=.25,'Brushed metal needs a directional highlight');
+  classic.setDark(true);assert.ok(front.roughness>=.34&&front.roughness<=.45);assert.ok(front.metalness>=.88);
   classic.setDark(false);assert.equal(front.metalness,.96);
+});
+
+test('graphite wheel recess and seams follow the finish instead of retaining silver edges',()=>{
+  const classic=createClassic(new THREE.Texture(),{baseline:false}),names=['Click_wheel_recess','Center_button_seam','Wheel_inner_satin_lip','Wheel_rounded_outer_lip'];
+  const silver=names.map(name=>classic.parts[name].material.color.clone());classic.setDark(true);
+  for(const [i,name]of names.entries()){
+    const material=classic.parts[name].material;
+    assert.ok(!material.color.equals(silver[i]),name+' must change with the finish');
+    assert.ok(Math.max(material.color.r,material.color.g,material.color.b)<.08,name+' retains a bright silver edge');
+    assert.ok(material.roughness>=.65,name+' has a sharp grazing highlight');
+  }
+  const face=classic.parts.Flat_anodized_face_with_cutouts;
+  assert.ok(Array.isArray(face.material),'Cutout walls need their own finish');
+  assert.ok(face.material[1]===classic.materials.wheelRecess,'Cutout walls must use the matte recess finish');
+});
+
+test('finish changes reuse printing and metal textures without shader or texture churn',()=>{
+  const classic=createClassic(new THREE.Texture(),{baseline:false}),front=classic.materials.front,printing=classic.parts.Printed_click_wheel_symbols.material;
+  const map=front.map,letters=printing.map,frontVersion=front.version,printingVersion=printing.version;let disposals=0;letters.addEventListener('dispose',()=>disposals++);
+  for(let i=0;i<12;i++){
+    classic.setDark(i%2===0);assert.ok(front.map===map,'Metal coating must stay bound');assert.ok(printing.map===letters,'Printed symbols must reuse their texture');
+    assert.equal(front.version,frontVersion);assert.equal(printing.version,printingVersion);
+  }
+  assert.equal(disposals,0);
+});
+
+test('the wheel well covers the opening so the chrome rear cannot flash through its perimeter',()=>{
+  const classic=createClassic(new THREE.Texture(),{baseline:false});classic.model.updateMatrixWorld(true);
+  // Avoid triangle-fan seams where exact-axis CPU rays are numerically ambiguous.
+  for(const angle of [.02,.8,1.6,3.2,4.8]){
+    const radius=1.942,x=radius*Math.cos(angle),y=dimensions.wheelY+radius*Math.sin(angle);
+    const ray=new THREE.Raycaster(new THREE.Vector3(x,y,10),new THREE.Vector3(0,0,-1));
+    const hit=ray.intersectObject(classic.model,true).find(h=>!h.object.userData.decorative&&h.object.name!=='Printed_click_wheel_symbols');
+    assert.equal(hit?.object.name,'Click_wheel_recess','Chrome shows through the wheel opening at '+angle);
+  }
 });
 
 test('reduced motion freezes particles and breathing; track accent is deterministic',()=>{
