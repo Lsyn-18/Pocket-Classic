@@ -43,6 +43,8 @@ data class ClassicState(
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
+    private var openingClaimed = false
+    fun claimOpening(): Boolean = (!openingClaimed).also { openingClaimed = true }
     private val store = MusicSessionStore(application)
     private val api = NetEaseApi(store)
     val localMusic = LocalMusicLibrary(application)

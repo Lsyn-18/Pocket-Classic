@@ -96,6 +96,7 @@ class IntegratedPlayerTest {
         scenario=ActivityScenario.launch(MainActivity::class.java)
         try {
             ready("!!window.PocketClassicContext&&document.body.classList.contains('three-ready')",45)
+            ready("!document.body.classList.contains('startup-playing')",15)
             ready("Number(document.getElementById('modelViewport').dataset.frames)>=3",45)
             ready("document.getElementById('modelViewport').getBoundingClientRect().height>100")
             waitFor("Player window did not gain focus") { val focused=AtomicReference(false);onActivity { focused.set(it.window.decorView.hasWindowFocus()) };focused.get() }

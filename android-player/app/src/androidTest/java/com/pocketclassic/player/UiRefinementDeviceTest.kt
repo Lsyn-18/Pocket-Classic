@@ -83,6 +83,7 @@ class UiRefinementDeviceTest {
         instrumentation.uiAutomation.executeShellCommand("am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10000000 -n com.pocketclassic.player/.MainActivity")
             .use { descriptor -> FileInputStream(descriptor.fileDescriptor).use { it.readBytes() } }
         ready("!!window.PocketClassicContext&&document.body.classList.contains('three-ready')")
+        ready("!document.body.classList.contains('startup-playing')")
         var original = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         onActivity { original = it.requestedOrientation }
         try {

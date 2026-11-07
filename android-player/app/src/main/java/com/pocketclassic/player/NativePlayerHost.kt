@@ -86,7 +86,7 @@ class NativePlayerHost(
                 val method = message.getString("method"); require(method in NativeContract.methods)
                 val args = message.optJSONObject("args") ?: JSONObject()
                 val result: Any = when (method) {
-                    "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true).put("battery", battery.read()) }
+                    "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true).put("battery", battery.read()).put("opening", vm.claimOpening()) }
                     "api" -> vm.browserApi(args.getString("route"))
                     "connection" -> { vm.showConnection(); JSONObject() }
                     "localScan", "localImport", "localFolder" -> localAction(method, args.optString("category", "device"))

@@ -70,6 +70,7 @@ class PhysicalDeviceSmokeTest {
         scenario = ActivityScenario.launch(MainActivity::class.java)
         try {
             waitFor("!!window.PocketClassicContext&&document.body.classList.contains('three-ready')",45)
+            waitFor("!document.body.classList.contains('startup-playing')")
             js("window.motionSampleCount=0;window.quaternionSampleCount=0;window.stopMotionSamples=window.PocketClassicContext.native.motion.subscribe(v=>{window.motionSampleCount++;if(Array.isArray(v.quaternion)&&v.quaternion.length===4&&Math.abs(Math.hypot(...v.quaternion)-1)<.01)window.quaternionSampleCount++});document.getElementById('motionToggle').click()")
             waitFor("window.motionSampleCount>=8&&window.quaternionSampleCount>=8&&document.getElementById('modelViewport').dataset.motion==='active'",20)
             step("Native sensor samples received and natural-hold calibration became active")
@@ -86,6 +87,7 @@ class PhysicalDeviceSmokeTest {
         var originalOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         try {
             waitFor("!!window.PocketClassicContext&&document.body.classList.contains('three-ready')", 45)
+            waitFor("!document.body.classList.contains('startup-playing')")
             js("window.PocketClassicContext.native.ready.then(()=>window.physicalSmokeReady=true)")
             waitFor("window.physicalSmokeReady===true")
             waitFor("Number(document.getElementById('modelViewport').dataset.frames)>10")

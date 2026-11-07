@@ -116,3 +116,17 @@ body.dark:not(.visual-baseline){background:#101a29;color:#dce7f2}
 .help-content{padding:0 22px 22px}.help-content p{margin:14px 0}.help-content dl{margin:18px 0}.help-content .actions{margin-top:20px}
 .dark .help-heading button{color:#9acbfa}.dark .dialog-eyebrow{color:#9eb8d0}
 .progress,.progress.seek{height:3px;border:0;border-radius:0;outline:0;background:#c5d2df}.progress i{background:#2874b9}
+/* One projection from the silver outlines to the real wheel and full player. */
+.startup-rings{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;z-index:3;will-change:opacity}
+.startup-rings i{position:absolute;display:block;border:1px solid #919ca7;border-radius:50%;transform:translate(-50%,-50%);box-sizing:border-box;box-shadow:0 1px 1px #fff9,inset 0 1px 1px #ffffff70}
+.dark .startup-rings i{border-color:#b7c7d6;box-shadow:0 1px 2px #0004,inset 0 1px 1px #edf5ff33}
+.startup-skip{position:fixed;right:max(24px,env(safe-area-inset-right));bottom:max(22px,env(safe-area-inset-bottom));z-index:20;min-height:44px;padding:0 16px;border:1px solid #879aab44;border-radius:24px;background:#f3f6f9b3;color:#53697d;font:12px 'Helvetica Neue','Microsoft YaHei',sans-serif;cursor:pointer}
+.startup-skip:focus-visible{outline:2px solid #6599bd;outline-offset:3px}
+.dark .startup-skip{background:#1c2b3db3;color:#c4d3e1;border-color:#9bb1c644}
+.startup-playing :is(header,.intro,.notes,footer,#playerTools,#modelStatus,.model-hit-controls){visibility:hidden;pointer-events:none}
+.three-ready :is(header,.intro,.notes,footer,#playerTools,#modelStatus){transition:opacity .45s ease}
+.startup-playing :is(header,.intro,.notes,footer,#playerTools,#modelStatus){opacity:0}
+.reduce-motion :is(header,.intro,.notes,footer,#playerTools,#modelStatus){transition:none}
+@media(prefers-reduced-motion:reduce){.three-ready :is(header,.intro,.notes,footer,#playerTools,#modelStatus){transition:none}}
+.startup-playing .ambient-backdrop:after{animation-play-state:paused;opacity:.35;transform:none}
+.startup-playing #modelViewport>canvas.lcd-surface{opacity:0}
