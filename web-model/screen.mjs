@@ -31,7 +31,7 @@ export function makeScreen(app,{pixelScale=4,maxAnisotropy=1,baseline=visualBase
     const a=app.audio;
     // Start the request even when an unchanged, paused screen skips painting.
     artwork.get(s.current);
-    const key=JSON.stringify([s.page,s.selected,s.title,s.current?.id,s.current?.cover,artwork.revision,s.battery?.level,s.battery?.charging,s.nickname,s.connected,s.busy,s.hold,s.sleep,s.mode,s.trial,s.queueMode,s.queue?.length,s.queueIndex,s.tracks?.length,s.playlists?.length,s.noticeError,s.haptics,s.shuffle,s.repeat,s.dark,Math.floor(a?.currentTime||0),a?.paused,a?.volume,app.footerText?.()]);
+    const key=JSON.stringify([s.page,s.selected,s.title,s.current?.id,s.current?.cover,artwork.revision,s.battery?.level,s.battery?.charging,s.nickname,s.connected,s.busy,s.hold,s.sleep,s.mode,s.trial,s.queueMode,s.queue?.length,s.queueIndex,s.tracks?.length,s.playlists?.length,s.artists?.length,s.artistMore,s.tracksMore,s.quality,s.noticeError,s.haptics,s.shuffle,s.repeat,s.dark,Math.floor(a?.currentTime||0),a?.paused,a?.volume,app.footerText?.()]);
     if(!force&&key===lastKey)return;lastKey=key;
     c.setTransform(scale,0,0,scale,0,0);c.fillStyle=s.sleep?'#151d28':'#fcfdff';c.fillRect(0,0,320,240);listLayout=null;
     if(s.sleep){texture.needsUpdate=true;return}
@@ -52,12 +52,12 @@ export function makeScreen(app,{pixelScale=4,maxAnisotropy=1,baseline=visualBase
       const split=s.page==='home';const rowH=split?32:36;const visible=Math.floor(198/rowH);const start=Math.max(0,Math.min(s.selected-2,list.length-visible));const width=split?158:320;
       if(split){const gradient=c.createLinearGradient(159,24,320,222);gradient.addColorStop(0,'#dce4ed');gradient.addColorStop(1,'#f1f5fa');c.fillStyle=gradient;c.fillRect(159,24,161,200);c.fillStyle='#c1ccda';c.fillRect(158,24,1,200);c.save();c.translate(242,100);c.rotate(-.13);album(-43,-43,86,s.current);c.globalAlpha=.16;c.scale(1,-1);album(-43,-135,86,s.current);c.restore();text('MUSIC',216,198,90,'10px Arial','#7d8fa6')}
       list.slice(start,start+visible).forEach((item,i)=>{const idx=start+i,y=24+i*rowH,active=idx===s.selected;if(active){const gradient=c.createLinearGradient(0,y,0,y+rowH);gradient.addColorStop(0,'#69b3eb');gradient.addColorStop(.5,'#3d93de');gradient.addColorStop(1,'#1e6ac1');c.fillStyle=gradient;c.fillRect(0,y,width,rowH)}
-        const nameFont=baseline?(active?'bold 13px Arial':'13px Arial'):(active?'700 14px Arial':'600 14px Arial');
+        const nameFont=baseline?(active?'bold 13px Arial':'13px Arial'):(active?'600 13px Arial':'400 13px Arial');
         text(item.name,8,y+(item.sub?12:rowH/2),width-29,nameFont,active?'#fff':'#172332');if(item.sub)text(item.sub,8,y+27,width-29,baseline?'9px Arial':'10px Arial',active?'#e0eeff':'#7b8a9c');text('›',width-15,y+rowH/2,12,'19px Arial',active?'#fff':'#536378')});
       if(!list.length&&!s.busy)text(s.page==='playing'?'按 MENU 返回音乐菜单':'暂无歌曲，按 MENU 返回重试',50,121,260,'12px Arial','#7b8a9c');
       listLayout={start,rowH,width,count:list.length};
     }
-    c.fillStyle=s.noticeError?'#fae4bd':'#e8eef5';c.fillRect(0,224,320,16);text(neutral?'Pocket Classic':(app.footerText?.()||(s.connected?'网易云音乐 · '+s.nickname:'选择音乐，开始播放')),6,232,307,baseline?'8px Arial':'10px Arial',s.noticeError?'#845730':'#8090a1');
+    c.fillStyle=s.noticeError?'#fae4bd':'#e8eef5';c.fillRect(0,224,320,16);text(neutral?'Pocket Classic':(app.footerText?.()||(s.connected?'网易云音乐 · '+s.nickname:'选择音乐，开始播放')),6,232,307,baseline?'8px Arial':'9px Arial',s.noticeError?'#845730':'#8090a1');
     if(s.busy){c.fillStyle='#ffffffd9';c.fillRect(0,24,320,200);text('正在读取音乐…',108,120,150,'12px Arial','#5c7896')}
     if(!baseline){
       // Subpixel lattice, kept below 2% opacity so small Chinese text stays clear.

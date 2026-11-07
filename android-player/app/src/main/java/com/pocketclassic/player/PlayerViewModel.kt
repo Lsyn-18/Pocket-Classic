@@ -145,6 +145,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val index = data.getInt("index"); require(index in 0 until tracks.length())
         val mode = data.optString("mode", "playlist"); require(NativeContract.validMode(mode))
         require(store.read() != null) { "请先登录网易云音乐" }
+        val quality=data.optString("quality",store.quality);require(MusicQuality.valid(quality)) { "无效音质" };store.quality=quality
         val session = UUID.randomUUID().toString()
         val items = List(tracks.length()) {
             val track = trackFromJson(tracks.getJSONObject(it))
@@ -176,7 +177,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
         }
     }
-    fun preferences(data: JSONObject) { store.dark = data.optBoolean("dark"); store.haptics = data.optBoolean("haptics", true) }
+    fun preferences(data: JSONObject) { val quality=data.optString("quality",store.quality);require(MusicQuality.valid(quality));store.dark = data.optBoolean("dark"); store.haptics = data.optBoolean("haptics", true);store.quality=quality }
     fun snapshot(includeQueue: Boolean): JSONObject {
         val c = controller; val item = c?.currentMediaItem; val extra = item?.mediaMetadata?.extras
         val duration = c?.duration?.takeIf { it > 0 && it != C.TIME_UNSET } ?: 0
@@ -187,6 +188,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             .put("index", c?.currentMediaItemIndex?.coerceAtLeast(0) ?: 0).put("count", c?.mediaItemCount ?: 0)
             .put("mode", extra?.getString("mode") ?: "playlist").put("shuffle", c?.shuffleModeEnabled ?: false)
             .put("repeat", c?.repeatMode ?: 0).put("dark", store.dark).put("haptics", store.haptics)
+            .put("quality",store.quality)
             .put("current", item?.let(::trackJson) ?: JSONObject.NULL)
             .put("error", c?.playerError?.cause?.message?.take(140) ?: c?.playerError?.message?.take(140) ?: radioError ?: "")
         if (includeQueue) result.put("tracks", JSONArray().apply { if (c != null) for (i in 0 until c.mediaItemCount) put(trackJson(c.getMediaItemAt(i))) })

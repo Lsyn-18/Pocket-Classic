@@ -88,6 +88,23 @@ class NetEaseApi(private val store: MusicSessionStore) {
         require(NativeContract.allowedApi(route))
         if(route=="status")return status()
         val session=current();val result=when {
+            route.startsWith("artists?offset=") -> {
+                val offset=route.substringAfter("offset=").toInt()
+                val body=checked(request("/api/artist/sublist",JSONObject().put("offset",offset).put("limit",50).put("total",true),session.cookie))
+                val list=body.optJSONArray("data")?:throw IOException("网易云歌手列表暂时无法识别")
+                val output=JSONArray();val seen=hashSetOf<Long>()
+                for(i in 0 until list.length())list.optJSONObject(i)?.let { a ->
+                    val id=a.optLong("id");if(id>0&&seen.add(id))output.put(JSONObject().put("id",id).put("name",a.optString("name","未知歌手")).put("songCount",a.optInt("musicSize").coerceAtLeast(0)))
+                }
+                JSONObject().put("artists",output).put("nextOffset",offset+list.length()).put("more",hasMore(body,offset,list.length(),50))
+            }
+            route.startsWith("artist-tracks?id=") -> {
+                val id=route.substringAfter("id=").substringBefore('&').toLong();val offset=route.substringAfter("offset=").toInt()
+                val data=JSONObject().put("id",id).put("offset",offset).put("limit",100).put("order","hot").put("private_cloud","true").put("work_type",1)
+                val body=checked(request("/api/v1/artist/songs",data,session.cookie))
+                val songs=body.optJSONArray("songs")?:throw IOException("网易云歌手歌曲暂时无法识别")
+                JSONObject().put("id",id).put("tracks",normalize(songs)).put("nextOffset",offset+songs.length()).put("more",hasMore(body,offset,songs.length(),100))
+            }
             route=="playlists" -> {
                 val body=checked(request("/api/user/playlist",JSONObject().put("uid",session.userId).put("limit",100).put("offset",0).put("includeVideo",true),session.cookie))
                 val list=body.optJSONArray("playlist")?:JSONArray();val output=JSONArray()
@@ -108,10 +125,16 @@ class NetEaseApi(private val store: MusicSessionStore) {
         }
         ensureSession(session);return result
     }
+    private fun hasMore(body: JSONObject, offset: Int, count: Int, limit: Int): Boolean = count>0 && when {
+        body.has("hasMore") && !body.isNull("hasMore") -> body.optBoolean("hasMore")
+        body.has("more") && !body.isNull("more") -> body.optBoolean("more")
+        body.has("count") && !body.isNull("count") -> offset+count<body.optInt("count")
+        else -> count==limit
+    }
     fun roaming(): List<MusicTrack> { val tracks=browserApi("roam").getJSONArray("tracks");return List(tracks.length()) { trackFromJson(tracks.getJSONObject(it)) } }
-    fun resolve(id: Long): PlayResource {
-        require(id>0);val session=current()
-        val body=checked(request("/api/song/enhance/player/url/v1",JSONObject().put("ids","[$id]").put("level","standard").put("encodeType","flac"),session.cookie))
+    fun resolve(id: Long, quality: String = store.quality): PlayResource {
+        require(id>0 && MusicQuality.valid(quality));val session=current()
+        val body=checked(request("/api/song/enhance/player/url/v1",JSONObject().put("ids","[$id]").put("level",quality).put("encodeType","flac"),session.cookie))
         ensureSession(session)
         val item=body.optJSONArray("data")?.optJSONObject(0)?:throw IOException("歌曲暂时没有可用音源")
         val url=item.optString("url");if(!url.startsWith("https://")&&!url.startsWith("http://"))throw IOException("这首歌受账号或版权权限限制，请尝试下一首")

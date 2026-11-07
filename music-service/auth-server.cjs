@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { root, call, errorSummary, prepareKey } = require('./bridge.cjs');
 const { createDiscovery, normalizeTracks } = require('./discovery.cjs');
+const {createLibrary}=require('./library.cjs');
 const PORT = 17863;
 const origin = `http://127.0.0.1:${PORT}`;
 let cookie = '';
@@ -13,6 +14,7 @@ let polling = false;
 let snapshot = { phase: 'idle', authenticated: false, message: '点击生成二维码后，用网易云音乐 App 扫码授权。' };
 let report = { checkedAt: new Date().toISOString(), login: 'pending', replacementSources: false };
 const discovery = createDiscovery({call, getSession: () => ({cookie, authenticated: snapshot.authenticated})});
+const library = createLibrary({call,getSession:()=>({cookie,authenticated:snapshot.authenticated})});
 const reportPath = path.join(__dirname, 'account-results.json');
 function saveReport() {}
 function send(res, value, status = 200) {
@@ -31,11 +33,8 @@ async function tracks(id) {
   return { id: r.body.playlist.id, name: r.body.playlist.name, trackCount: r.body.playlist.trackCount,
     tracks: normalizeTracks(r.body.playlist.tracks || []) };
 }
-async function resolve(id) {
-  const r = await call('song_url_v1', { id, level: 'standard', unblock: 'false' }, cookie);
-  const a = r.body.data?.[0];
-  if (!a) throw { body: r.body };
-  return { id, code: a.code, url: a.url || null, durationMs: a.time, size: a.size, trial: a.freeTrialInfo || null, type: a.type };
+async function resolve(id,quality='standard') {
+  return library.resolve(id,quality);
 }
 async function verifyAccount() {
   const r = await call('login_status', {}, cookie);
@@ -85,6 +84,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/playlists') return send(res, { playlists: await playlists() });
     if (req.method === 'GET' && url.pathname === '/api/daily') return send(res, await discovery.daily());
     if (req.method === 'GET' && url.pathname === '/api/roam') return send(res, await discovery.roam());
+    if (req.method === 'GET' && url.pathname === '/api/artists') return send(res,await library.artists(url.searchParams.get('offset')??'0'));
+    if (req.method === 'GET' && url.pathname === '/api/artist-tracks') return send(res,await library.artistTracks(url.searchParams.get('id'),url.searchParams.get('offset')??'0'));
     if (req.method === 'GET' && url.pathname === '/api/tracks') {
       const id = url.searchParams.get('id');
       if (!/^\d+$/.test(id || '')) return send(res, { error: '无效歌单' }, 400);
@@ -109,7 +110,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (url.pathname === '/api/resolve') {
         if (!/^\d+$/.test(String(data.id || ''))) return send(res, { error: '无效歌曲' }, 400);
-        return send(res, await resolve(data.id));
+        return send(res, await resolve(data.id,data.quality??'standard'));
       }
       if (url.pathname === '/api/logout') {
         discovery.clear();
@@ -119,7 +120,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
     send(res, { error: 'Not found' }, 404);
-  } catch (e) { send(res, { error: errorSummary(e).message }, e.status === 401 ? 401 : 502); }
+  } catch (e) { send(res, { error: errorSummary(e).message }, [400,401].includes(e.status) ? e.status : 502); }
 });
 prepareKey().then(() => {
   server.listen(PORT, '127.0.0.1', () => console.log(`Netease connection probe: ${origin}`));

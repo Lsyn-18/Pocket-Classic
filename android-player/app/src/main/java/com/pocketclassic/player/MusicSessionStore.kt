@@ -40,4 +40,5 @@ class MusicSessionStore(context: Context) {
     val deviceId: String get()=prefs.getString("musicDevice",null)?:UUID.randomUUID().toString().replace("-","").also { prefs.edit().putString("musicDevice",it).apply() }
     var dark: Boolean get()=prefs.getBoolean("dark",false);set(value) { prefs.edit().putBoolean("dark",value).apply() }
     var haptics: Boolean get()=prefs.getBoolean("haptics",true);set(value) { prefs.edit().putBoolean("haptics",value).apply() }
+    var quality: String get()=MusicQuality.restored(prefs.getString("quality",null));set(value) { require(MusicQuality.valid(value));prefs.edit().putString("quality",value).apply() }
 }

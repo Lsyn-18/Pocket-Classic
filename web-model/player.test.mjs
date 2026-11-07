@@ -22,12 +22,30 @@ function fixture(routes={}){
   const app=window.PocketClassicContext;app.state.connected=true;
   return {app,elements,listeners,get playCount(){return playCount;}};
 }
-test('music menu contains playlists, daily recommendations and private roaming',async()=>{
-  const {app}=fixture();await app.select();assert.equal(app.state.page,'music');assert.deepEqual(Array.from(app.entries(),x=>x.name),['我的歌单','每日推荐','私人漫游']);
+test('music menu contains playlists, daily recommendations, private roaming and followed artists',async()=>{
+  const {app}=fixture();await app.select();assert.equal(app.state.page,'music');assert.deepEqual(Array.from(app.entries(),x=>x.name),['我的歌单','每日推荐','私人漫游','关注的歌手']);
 });
 test('daily tracks can be selected and remain a normal finite playback queue',async()=>{
   const {app}=fixture({daily:()=>({tracks:[song(10),song(11)]})});await app.select();app.state.selected=1;await app.select();assert.equal(app.state.title,'每日推荐');
   await app.select();assert.equal(app.state.queueMode,'daily');assert.equal(app.state.current.id,10);await app.action('next');assert.equal(app.state.current.id,11);await app.action('next');assert.equal(app.state.current.id,11);
+});
+
+test('quality selection reaches resolution requests and can fall back without mislabelling playback',async()=>{
+  let requested;const {app}=fixture({daily:()=>({tracks:[song(7)]}),resolve:body=>{requested=body;return {url:'https://test.music.126.net/song.mp3',level:'standard'};}});
+  app.state.selected=3;await app.select();app.state.selected=5;await app.select();assert.equal(app.state.page,'quality');app.state.selected=3;await app.select();assert.equal(app.state.quality,'hires');
+  app.action('menu',true);await app.select();app.state.selected=1;await app.select();await app.select();assert.equal(requested.quality,'hires');assert.equal(app.state.current.id,7);
+});
+
+test('followed singers and their songs paginate, deduplicate and form a finite artist queue',async()=>{
+  const {app}=fixture({artists:(_,route)=>route.endsWith('=0')?{artists:[{id:1,name:'Singer A',songCount:3}],more:true,nextOffset:50}:{artists:[{id:1,name:'duplicate'},{id:2,name:'Singer B'}],more:false,nextOffset:51},'artist-tracks':(_,route)=>route.endsWith('offset=0')?{tracks:[song(10)],more:true,nextOffset:100}:{tracks:[song(10),song(11)],more:false,nextOffset:102}});
+  await app.select();app.state.selected=3;await app.select();assert.equal(app.state.page,'artists');app.state.selected=1;await app.select();assert.deepEqual(Array.from(app.state.artists,a=>a.id),[1,2]);
+  app.state.selected=0;await app.select();assert.equal(app.state.title,'Singer A');app.state.selected=1;await app.select();assert.deepEqual(Array.from(app.state.tracks,t=>t.id),[10,11]);app.state.selected=1;await app.select();assert.equal(app.state.queueMode,'artist');assert.equal(app.state.current.id,11);
+});
+
+test('leaving singer pagination discards its response and errors keep retry possible',async()=>{
+  let finish;const {app,elements}=fixture({artists:(_,route)=>route.endsWith('=0')?{artists:[{id:1,name:'Singer'}],more:true,nextOffset:50}:new Promise(r=>{finish=r;})});
+  await app.select();app.state.selected=3;await app.select();app.state.selected=1;const pending=app.select();app.action('menu');finish({artists:[{id:2}],more:false,nextOffset:51});await pending;assert.equal(app.state.page,'music');assert.equal(app.state.artists.length,1);
+  const failure=fixture({artists:()=>({error:'歌手服务暂不可用'})});await failure.app.select();failure.app.state.selected=3;await failure.app.select();assert.equal(failure.app.state.noticeError,true);assert.match(failure.elements.get('lcdFooter').textContent,/歌手服务/);
 });
 test('private roaming refills across the initial batch and supports previous',async()=>{
   let calls=0;const f=fixture({roam:()=>({tracks:(++calls===1?[1,2,3]:[4,5,6]).map(song)})});const {app}=f;
