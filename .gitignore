@@ -1,6 +1,7 @@
 # Local sessions, credentials, private verification data and toolchains
 /work/
 /outputs/
+/.codex/
 **/runtime/
 .env
 .env.*

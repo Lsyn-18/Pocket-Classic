@@ -40,9 +40,9 @@ export function makeScreen(app,{pixelScale=4,maxAnisotropy=1,baseline=visualBase
   function draw(force=false,neutral=false) {
     now=typeof performance!=='undefined'?performance.now():Date.now();
     const s=neutral?{page:'home',selected:0,title:'iPod',battery:app.state.battery}:app.state,a=app.audio;
-    const selection=[s.page,s.selected,s.current?.id,s.mode].join(':');if(selection!==selectionKey){selectionKey=selection;selectedAt=now;}
+    const selection=[s.page,s.selected,s.current?.id,s.mode,s.seeking].join(':');if(selection!==selectionKey){selectionKey=selection;selectedAt=now;}
     artwork.get(s.current);
-    const key=JSON.stringify([s.page,s.selected,s.title,s.current,s.battery,s.nickname,s.connected,s.busy,s.hold,s.sleep,s.mode,s.trial,s.queueMode,s.queue?.length,s.queueIndex,s.tracks?.length,s.playlists?.length,s.artists?.length,s.artistMore,s.tracksMore,s.quality,s.actualQuality,s.buffering,s.haptics,s.shuffle,s.repeat,s.dark,s.theme,s.largeText,s.reducedMotion,s.problem,s.feedback,artwork.revision,Math.floor(a?.currentTime||0),a?.paused,a?.volume,app.footerText?.(),animated?Math.floor(now/50):0]);
+    const key=JSON.stringify([s.page,s.selected,s.title,s.current,s.battery,s.nickname,s.connected,s.busy,s.hold,s.sleep,s.mode,s.seeking,s.trial,s.queueMode,s.queue?.length,s.queueIndex,s.tracks?.length,s.playlists?.length,s.artists?.length,s.artistMore,s.tracksMore,s.quality,s.actualQuality,s.buffering,s.haptics,s.shuffle,s.repeat,s.dark,s.theme,s.largeText,s.reducedMotion,s.problem,s.feedback,artwork.revision,Math.floor((a?.currentTime||0)*(s.seeking?10:1)),a?.paused,a?.volume,app.footerText?.(),animated?Math.floor(now/50):0]);
     if(!force&&key===lastKey)return;lastKey=key;animated=false;zones=[];listLayout=null;
     c.setTransform(scale,0,0,scale,0,0);c.fillStyle=s.sleep?'#151d28':'#fbfcfe';c.fillRect(0,0,320,240);
     if(s.sleep){texture.needsUpdate=true;return;}
@@ -51,12 +51,11 @@ export function makeScreen(app,{pixelScale=4,maxAnisotropy=1,baseline=visualBase
     if(a&&!a.paused&&!neutral){c.fillStyle='#246ab4';c.beginPath();c.moveTo(265,7);c.lineTo(273,12);c.lineTo(265,17);c.closePath();c.fill();}drawBattery(c,s.battery);
     if(s.page==='playing'&&s.current){
       const t=s.current;album(12,38,90,t);text(t.name,114,51,194,s.largeText?17:15,'#172b3e',600,true);text(t.artist,114,76,194,13,'#40576c');text(t.album||'未知专辑',114,98,194,11,'#53677c');
-      const status=s.buffering?'正在缓冲…':s.trial?'试听片段':a.paused?'已暂停':'正在播放';
+      const status=s.seeking?(s.seeking>0?'快进 ››':'‹‹ 快退'):s.buffering?'正在缓冲…':s.trial?'试听片段':a.paused?'已暂停':'正在播放';
       text(status,114,120,90,11,'#275783',500);text(s.actualQuality?qualityLabel(s.actualQuality):'按权限提供',223,120,85,10,'#52677a');
       const duration=Number.isFinite(a.duration)?a.duration:t.durationMs/1000,progress=Math.max(0,Math.min(1,(a.currentTime||0)/Math.max(1,duration))),seek=s.mode==='seek';
-      c.fillStyle=seek?'#e4eef9':'#eef2f6';c.fillRect(8,142,304,51);text(seek?'调整进度':'播放进度',14,153,150,11,seek?'#205e9f':'#4e6379',500);
-      c.fillStyle='#c5d2df';c.fillRect(14,168,292,5);c.fillStyle='#2874b9';c.fillRect(14,168,292*progress,5);if(seek){c.beginPath();c.arc(14+292*progress,170.5,4,0,Math.PI*2);c.fill();}
-      text(app.format(a.currentTime),14,184,110,11);text('−'+app.format(duration-a.currentTime),254,184,54,11);
+      c.fillStyle='#c5d2df';c.fillRect(14,162,292,3);c.fillStyle=seek||s.seeking?'#125dae':'#2874b9';c.fillRect(14,162,292*progress,3);
+      text(app.format(a.currentTime),14,181,110,11);text('−'+app.format(duration-a.currentTime),254,181,54,11);
       text('音量 '+Math.round(a.volume*100)+'%',14,207,90,11,seek?'#53677c':'#205e9f',seek?400:600);c.fillStyle='#d8e0e8';c.fillRect(104,205,100,4);c.fillStyle=seek?'#8b9caf':'#2874b9';c.fillRect(104,205,100*a.volume,4);
       text('队列 '+(s.queueIndex+1)+'/'+s.queue.length+' ›',225,207,83,11,'#275f92',500);
       zones.push({x:8,y:140,width:200,height:80,action:'mode'},{x:215,y:194,width:100,height:28,action:'queue'},{x:10,y:28,width:300,height:108,action:'details'});

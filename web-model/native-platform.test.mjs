@@ -35,6 +35,20 @@ test('seek, volume, pause and next become native commands',async()=>{
   f.platform.audio.volume=5;assert.deepEqual(f.messages.at(-1).args,{value:1});f.platform.audio.pause();assert.equal(f.messages.at(-1).method,'pause');
   const next=f.platform.next();f.respond(f.messages.at(-1));await next;assert.equal(f.messages.at(-1).method,'next');
 });
+
+test('native scrubbing keeps its target across stale snapshots and coalesces pending seeks',async()=>{
+  const f=await fixture(),a=f.platform.audio;
+  f.platform.receive({type:'playback',value:{positionMs:20000,durationMs:120000,current:{id:1},count:1,index:0}});
+  a.beginSeek();a.currentTime=25;const first=f.messages.at(-1);a.currentTime=28;a.currentTime=31;
+  assert.equal(f.messages.filter(m=>m.method==='seek').length,1);
+  f.platform.receive({type:'playback',value:{positionMs:20100,durationMs:120000,current:{id:1},count:1,index:0}});
+  assert.equal(a.currentTime,31);
+  a.endSeek();f.respond(first);await new Promise(resolve=>setImmediate(resolve));
+  const final=f.messages.at(-1);assert.deepEqual(final.args,{positionMs:31000});f.respond(final);await new Promise(resolve=>setImmediate(resolve));
+  f.platform.receive({type:'playback',value:{positionMs:25000,durationMs:120000,current:{id:1},count:1,index:0}});assert.equal(a.currentTime,31);
+  f.platform.receive({type:'playback',value:{positionMs:31200,durationMs:120000,current:{id:1},count:1,index:0}});assert.equal(a.currentTime,31.2);
+  f.platform.receive({type:'playback',value:{positionMs:1000,durationMs:180000,current:{id:2},count:1,index:0}});assert.equal(a.currentTime,1);
+});
 test('motion subscriptions and lifecycle are opt in and removable',async()=>{
   const f=await fixture(),samples=[],visibility=[];const off=f.platform.motion.subscribe(value=>samples.push(value));
   assert.deepEqual(f.messages.at(-1).args,{enabled:true});

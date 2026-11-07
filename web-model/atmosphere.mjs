@@ -16,11 +16,8 @@ export function createAtmosphere({scene,camera,native=false,baseline=false}) {
       void main(){vec2 p=vUv+uTilt*.8;
         float halo=exp(-dot((p-vec2(.5,.40))*vec2(2.1,2.4),(p-vec2(.5,.40))*vec2(2.1,2.4))*2.1);
         vec2 sideDelta=(p-vec2(.17,.67))/vec2(.24,.65);float side=exp(-dot(sideDelta,sideDelta));
-        vec3 paper=mix(vec3(.91,.94,.975),vec3(.014,.023,.039),uDark);
-        vec3 tint=mix(vec3(.97,.985,1.0),vec3(.075,.105,.15),uDark);
-        vec3 color=mix(paper,tint,side*.45);color+=uAccent*halo*uBreath*mix(.018,.065,uDark);
-        float edge=smoothstep(0.0,.17,vUv.x)*smoothstep(0.0,.17,1.0-vUv.x)*smoothstep(0.0,.15,vUv.y)*smoothstep(0.0,.15,1.0-vUv.y);
-        gl_FragColor=vec4(color,edge*.64);
+        vec3 color=mix(vec3(.88,.94,1.0),uAccent,.55);
+        gl_FragColor=vec4(color,(halo*.14+side*.025)*uBreath*mix(.45,.65,uDark));
         #include <colorspace_fragment>
       }`});
   const plane=new THREE.Mesh(new THREE.PlaneGeometry(2,2),material);plane.position.z=-5;plane.renderOrder=-10;plane.frustumCulled=false;plane.raycast=()=>{};group.add(plane);
@@ -42,7 +39,7 @@ export function createAtmosphere({scene,camera,native=false,baseline=false}) {
     if(lastId!==trackId){lastId=trackId;target.copy(trackAccent(trackId));backdrop?.style.setProperty('--track-accent',`${Math.round(target.r*255)},${Math.round(target.g*255)},${Math.round(target.b*255)}`);}
     const ease=1-Math.exp(-dt*2.4);accent.lerp(target,ease);uniforms.uDark.value+=(Number(dark)-uniforms.uDark.value)*ease;
     if(!reducedMotion){clock+=dt;phase+=dt*(playing?.55:.17);}
-    uniforms.uBreath.value=reducedMotion?1:1+Math.sin(phase)*.12;uniforms.uTilt.value.set(reducedMotion?0:tiltY,reducedMotion?0:tiltX);
+    uniforms.uBreath.value=reducedMotion?1:1+Math.sin(phase)*.35;uniforms.uTilt.value.set(reducedMotion?0:tiltY,reducedMotion?0:tiltX);
     particleUniforms.uTime.value=clock;particles.visible=!reducedMotion;
     const width=(camera.right-camera.left)/2,height=(camera.top-camera.bottom)/2,center=(camera.top+camera.bottom)/2;
     plane.scale.set(width,height,1);plane.position.y=center;particleUniforms.uBounds.value.set(width,height);particleUniforms.uCenter.value=center;

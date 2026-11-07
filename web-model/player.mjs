@@ -1,6 +1,7 @@
 import {createRoamStream} from './roam-stream.mjs';
 import {createNativePlatform} from './native-platform.mjs';
 import {createWheelInput} from './wheel-input.mjs';
+import {createButtonPress} from './button-press.mjs';
 import {coverUrl} from './artwork.mjs';
 import {menuMarker,listWindow,emptyContent,qualityLabel,appearanceIsDark,canAdvance} from './presentation.mjs';
 const native=window.PocketNative?createNativePlatform(window.PocketNative):null;
@@ -13,7 +14,7 @@ let queueEpoch=0,roamFill=null,roamNext=null,nativeInitialized=false;
 Object.assign(state,{artists:[],artistOffset:0,artistMore:false,artistId:0,tracksMore:false,tracksOffset:0,quality:'standard'});
 if(!native)try{state.quality=qualityValue(window.localStorage?.getItem('pocketclassic.quality'))}catch{}
 const roamStream=createRoamStream(()=>api('roam'));
-Object.assign(state,{theme:'auto',largeText:false,reducedMotion:false,reader:false,buffering:false,actualQuality:'',problem:null,feedback:''});
+Object.assign(state,{theme:'auto',largeText:false,reducedMotion:false,reader:false,buffering:false,actualQuality:'',problem:null,feedback:'',seeking:0});
 if(!native)try{const saved=JSON.parse(window.localStorage?.getItem('pocketclassic.appearance')||'{}');for(const key of ['dark','largeText','reducedMotion'])if(typeof saved[key]==='boolean')state[key]=saved[key];if(['auto','light','dark'].includes(saved.theme))state.theme=saved.theme;}catch{}
 const systemTheme=typeof matchMedia==='function'?matchMedia('(prefers-color-scheme: dark)'):null;
 systemTheme?.addEventListener('change',()=>render());
@@ -57,7 +58,7 @@ function renderReader(force=false){
 }
 function openQueue(){if(!state.queue.length){feedback('先选择一首歌，队列会显示在这里');return;}navigate('queue','播放队列');state.selected=state.queueIndex;render();}
 function openReader(){renderReader(true);state.reader=true;$('readerDialog').showModal();}
-function openHelp(){$('helpDialog').showModal();}
+function openHelp(){stopSeeking();const dialog=$('helpDialog');dialog.showModal();dialog.scrollTop=0;$('helpTitle').focus?.({preventScroll:true});}
 async function retryProblem(){const login=state.problem?.login;clearNotice();render();if(login)return openLogin();if(retryAction)return retryAction();if(state.current)return playAt(state.queueIndex);return updateAccount().catch(e=>footer(e.message,true));}
 function screenAction(name){if(name==='retry')return retryProblem();if(name==='back')return menu();if(name==='next')return next();if(name==='queue')return openQueue();if(name==='details')return openReader();if(name==='mode'){state.mode=state.mode==='seek'?'volume':'seek';feedback(state.mode==='seek'?'正在调整播放进度':'正在调整音量');render();}}
 function updateProgress(){if(state.page!=='playing'||!state.current)return;const duration=Number.isFinite(audio.duration)?audio.duration:state.current.durationMs/1000;const progress=$('progressFill');if(progress)progress.style.width=Math.min(100,audio.currentTime/Math.max(duration,1)*100)+'%';if($('elapsed'))$('elapsed').textContent=format(audio.currentTime);if($('remaining'))$('remaining').textContent='−'+format(duration-audio.currentTime);if($('volumeFill'))$('volumeFill').style.width=Math.round(audio.volume*100)+'%';if($('volumeText'))$('volumeText').textContent=Math.round(audio.volume*100)+'%';if($('caption'))$('caption').textContent=state.trial?'试听片段':state.mode==='seek'?'转动转轮调整进度':'转动转轮调整音量'}
@@ -93,7 +94,7 @@ async function select(){if(state.hold||state.busy)return;if(state.sleep){state.s
  else if(state.page==='playing')return screenAction('mode');
  else if(state.page==='settings'){if(index===0)return openLogin();if(index===5)return navigate('quality','音质选择');if(index===6)return navigate('appearance','显示与动态效果');if(index===7)return openHelp();if(index===1)state.haptics=!state.haptics;if(index===2&&state.queueMode!=='roam')state.shuffle=!state.shuffle;if(index===3&&state.queueMode!=='roam')state.repeat=(state.repeat+1)%3;if(index===4)state.dark=!state.dark;if(index===2||index===3)native?.configure({shuffle:state.shuffle,repeat:state.repeat});render()}}
 function nowPlaying(){if(!state.current){footer('先从音乐菜单选择一首歌');return}if(state.page!=='playing')navigate('playing',state.queueMode==='roam'?'私人漫游':'正在播放')}
-async function playAt(index,queue=state.queue,mode=state.queueMode){if(!queue[index])return;
+async function playAt(index,queue=state.queue,mode=state.queueMode){if(!queue[index])return;stopSeeking();
  clearNotice();retryAction=()=>playAt(state.queueIndex);state.actualQuality='';state.buffering=true;
  native?.beginTransition();
  if(queue!==state.queue||mode!==state.queueMode){++queueEpoch;roamFill=null;roamNext=null;if(mode!=='roam')roamStream.reset()}
@@ -118,6 +119,15 @@ function refillRoam(){
 function menu(home=false){if(state.hold){feedback('按键已锁定 · 拨动顶部开关解锁');return;}clearNotice();if(state.sleep){state.sleep=false;render();return}++requestEpoch;state.busy=false;if(home||!state.history.length){state.page='home';state.title='iPod';state.selected=0;state.history=[]}else Object.assign(state,state.history.pop());render()}
 function rotate(delta){if(state.hold||state.busy)return;if(state.sleep){state.sleep=false;render();return}if(state.page==='playing'){tick();if(state.mode==='seek')seek(delta*3);else audio.volume=Math.max(0,Math.min(1,audio.volume+delta*.04));updateProgress()}else{const selected=Math.max(0,Math.min(entries().length-1,state.selected+delta));if(selected!==state.selected){state.selected=selected;tick();render()}}}
 function seek(seconds){if(state.current&&Number.isFinite(audio.duration)){audio.currentTime=Math.max(0,Math.min(audio.duration,audio.currentTime+seconds));updateProgress()}}
+let seekingTimer=null;
+function stopSeeking(){clearInterval(seekingTimer);seekingTimer=null;if(state.seeking){state.seeking=0;audio.endSeek?.();state.feedback='';}}
+function startSeeking(direction){
+ if(state.seeking===direction)return;
+ stopSeeking();if(!state.current||!Number.isFinite(audio.duration)||audio.duration<=0||state.buffering)return;
+ const track=state.current.id,start=Date.now();let previous=start;state.seeking=direction;audio.beginSeek?.();
+ const advance=()=>{if(state.hold||state.sleep||state.current?.id!==track){stopSeeking();return;}const now=Date.now(),dt=Math.min(.25,(now-previous)/1000);previous=now;const speed=now-start>1800?24:10;const target=Math.max(0,Math.min(Math.max(0,audio.duration-.25),audio.currentTime+direction*speed*dt));if(target!==audio.currentTime)audio.currentTime=target;updateProgress();};
+ seekingTimer=setInterval(advance,120);
+}
 async function toggle(){if(state.sleep){state.sleep=false;render();return}if(state.busy)return;if(state.page==='tracks')return select();if(!state.current){footer('先从音乐菜单选择一首歌');return}if(lastPlayError)return playAt(state.queueIndex);try{if(audio.paused)await audio.play();else audio.pause()}catch(e){footer('播放失败，请重新选择歌曲',true)}}
 async function next(){if(state.busy||!state.queue.length)return;
  if(native){clearNotice();return native.next().catch(e=>footer(e.message,true));}
@@ -130,12 +140,16 @@ async function next(){if(state.busy||!state.queue.length)return;
  let index=state.queueIndex+1;if(state.shuffle&&state.queue.length>1){do{index=Math.floor(Math.random()*state.queue.length)}while(index===state.queueIndex)}if(index>=state.queue.length){if(state.repeat===2)index=0;else return}return playAt(index)
 }
 function previous(){if(native){clearNotice();return native.previous().catch(e=>footer(e.message,true));}if(audio.currentTime>3){audio.currentTime=0;return}if(state.queueIndex>0)playAt(state.queueIndex-1);else if(state.current)audio.currentTime=0}
-function action(name,long=false){if(state.hold){feedback('按键已锁定 · 拨动顶部开关解锁');return;}if(state.sleep){state.sleep=false;render();return}if(long){if(name==='menu')return menu(true);if(name==='play'){audio.pause();state.sleep=true;render();return}if(name==='previous'){feedback('快退');return seek(-2);}if(name==='next'){feedback('快进');return seek(2);}if(name==='select')return openQueue();}else{if(name==='select')return select();tick();if(name==='menu')return menu();if(name==='play')return toggle();if(name==='previous')return previous();if(name==='next')return next()}}
-let gesture=null,holdTimer=null,seekTimer=null;
-const clearTimers=()=>{clearTimeout(holdTimer);clearInterval(seekTimer)};
-$('wheel').addEventListener('pointerdown',event=>{if(event.button!==0)return;const rect=$('wheel').getBoundingClientRect(),x=event.clientX-rect.left-rect.width/2,y=event.clientY-rect.top-rect.height/2;gesture={id:event.pointerId,angle:Math.atan2(y,x),sum:0,dial:createWheelInput(),moved:false,held:false,valid:Math.hypot(x,y)>rect.width*.19,action:event.target.closest('[data-action]')?.dataset.action};$('wheel').setPointerCapture(event.pointerId);holdTimer=setTimeout(()=>{if(gesture&&!gesture.moved){gesture.held=true;action(gesture.action,true);if(['previous','next'].includes(gesture.action))seekTimer=setInterval(()=>action(gesture?.action,true),180)}},480)});
-$('wheel').addEventListener('pointermove',event=>{if(!gesture||gesture.id!==event.pointerId||!gesture.valid||state.hold)return;const rect=$('wheel').getBoundingClientRect(),a=Math.atan2(event.clientY-rect.top-rect.height/2,event.clientX-rect.left-rect.width/2);let delta=a-gesture.angle;while(delta>Math.PI)delta-=2*Math.PI;while(delta<-Math.PI)delta+=2*Math.PI;gesture.angle=a;gesture.sum+=delta;if(Math.abs(gesture.sum)>.065){gesture.moved=true;clearTimers()}const step=gesture.dial.move(delta,event.timeStamp);if(step)rotate(step)});
-$('wheel').addEventListener('pointerup',()=>{clearTimers();if(gesture&&!gesture.moved&&!gesture.held)action(gesture.action);gesture=null});$('wheel').addEventListener('pointercancel',()=>{clearTimers();gesture=null});
+function action(name,long=false){if(state.hold){stopSeeking();feedback('按键已锁定 · 拨动顶部开关解锁');return;}if(state.sleep){state.sleep=false;render();return}if(long){if(name==='menu')return menu(true);if(name==='play'){stopSeeking();audio.pause();state.sleep=true;render();return}if(name==='previous')return startSeeking(-1);if(name==='next')return startSeeking(1);if(name==='select')return openQueue();}else{stopSeeking();if(name==='select')return select();tick();if(name==='menu')return menu();if(name==='play')return toggle();if(name==='previous')return previous();if(name==='next')return next()}}
+let gesture=null;
+const wheelPress=createButtonPress({shortPress:action,longPress:name=>action(name,true),stop:stopSeeking});
+const cancelWheel=()=>{gesture=null;wheelPress.cancel();};
+$('wheel').addEventListener('pointerdown',event=>{if(event.button!==0||gesture)return;const rect=$('wheel').getBoundingClientRect(),x=event.clientX-rect.left-rect.width/2,y=event.clientY-rect.top-rect.height/2;gesture={id:event.pointerId,angle:Math.atan2(y,x),sum:0,dial:createWheelInput(),moved:false,valid:Math.hypot(x,y)>rect.width*.19,action:event.target.closest('[data-action]')?.dataset.action};$('wheel').setPointerCapture(event.pointerId);wheelPress.start(gesture.action)});
+$('wheel').addEventListener('pointermove',event=>{if(!gesture||gesture.id!==event.pointerId||!gesture.valid||state.hold)return;const rect=$('wheel').getBoundingClientRect(),a=Math.atan2(event.clientY-rect.top-rect.height/2,event.clientX-rect.left-rect.width/2);let delta=a-gesture.angle;while(delta>Math.PI)delta-=2*Math.PI;while(delta<-Math.PI)delta+=2*Math.PI;gesture.angle=a;gesture.sum+=delta;if(Math.abs(gesture.sum)>.065){gesture.moved=true;wheelPress.cancel()}const step=gesture.dial.move(delta,event.timeStamp);if(step)rotate(step)});
+$('wheel').addEventListener('pointerup',event=>{if(!gesture||gesture.id!==event.pointerId)return;gesture=null;wheelPress.release();});for(const name of ['pointercancel','lostpointercapture'])$('wheel').addEventListener(name,cancelWheel);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelWheel();});
+window.addEventListener?.('blur',cancelWheel);window.addEventListener?.('pagehide',cancelWheel);
+native?.motion.onVisibility(visible=>{if(!visible)cancelWheel();});
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',e=>{if(e.detail===0)action(b.dataset.action)}));
 $('hold').onclick=()=>{state.hold=!state.hold;render()};$('lcdFooter').onclick=()=>{if(lastPlayError&&state.current)playAt(state.queueIndex)};
 document.addEventListener('keydown',event=>{if(document.querySelector('dialog[open]')||event.target?.closest?.('button,input,select,textarea,a'))return;if(['ArrowDown','ArrowUp','Enter','Escape',' '].includes(event.key)){event.preventDefault();if(event.key==='ArrowDown')rotate(1);if(event.key==='ArrowUp')rotate(-1);if(event.key==='Enter')select();if(event.key==='Escape')menu();if(event.key===' '&&!state.hold)toggle()}});
@@ -150,7 +164,7 @@ $('account').onclick=openLogin;$('closeLogin').onclick=()=>{$('loginDialog').clo
 $('clearSession').onclick=async()=>{audio.pause();++playEpoch;++requestEpoch;++queueEpoch;roamStream.reset();roamFill=null;roamNext=null;await api('logout',{});state.connected=false;state.nickname='';state.current=null;state.queue=[];state.queueMode='playlist';state.playlists=[];state.artists=[];state.artistMore=false;state.tracks=[];state.tracksMore=false;audio.removeAttribute('src');$('newQr').hidden=false;await updateAccount();menu(true)};$('goPlaying').onclick=()=>{$('moreDialog').close();nowPlaying()};$('closeMore').onclick=()=>{$('moreDialog').close()};
 function updateBattery(value){const level=Number.isFinite(value?.level)?Math.max(0,Math.min(1,value.level)):null;state.battery={level,charging:!!value?.charging};$('battery').classList.toggle('charging',state.battery.charging);$('battery').classList.toggle('low',level!==null&&level<=.15);$('batteryLevel').style.width=level===null?'0%':Math.round(level*100)+'%';$('battery').setAttribute('aria-label',level===null?'电量不可用':Math.round(level*100)+'%'+(value.charging?' · 正在充电':''));$('battery').title=level===null?'当前环境不提供电量':Math.round(level*100)+'%';}
 updateBattery(state.battery);
-$('openReader').onclick=openReader;$('closeReader').onclick=()=>{state.reader=false;$('readerDialog').close();};$('readerDialog').addEventListener('close',()=>{state.reader=false;});$('readerBack').onclick=()=>menu();$('openHelp').onclick=openHelp;$('closeHelp').onclick=()=>$('helpDialog').close();
+$('closeReader').onclick=()=>{state.reader=false;$('readerDialog').close();};$('readerDialog').addEventListener('close',()=>{state.reader=false;});$('readerBack').onclick=()=>menu();$('openHelp').onclick=openHelp;$('closeHelp').onclick=$('dismissHelp').onclick=()=>$('helpDialog').close();
 if(native)native.onBattery(updateBattery);
 else if(navigator.getBattery)navigator.getBattery().then(b=>{const update=()=>updateBattery(b);update();b.addEventListener('levelchange',update);b.addEventListener('chargingchange',update)}).catch(()=>{});
 render();
@@ -164,11 +178,11 @@ if(native){
    state.buffering=!!value.buffering;state.actualQuality=value.actualQuality||'';
    if(!nativeInitialized){state.dark=!!value.dark;state.haptics=value.haptics!==false;state.quality=qualityValue(value.quality);state.theme=['auto','light','dark'].includes(value.theme)?value.theme:'auto';state.largeText=!!value.largeText;state.reducedMotion=!!value.reducedMotion;if(state.current)navigate('playing',state.queueMode==='roam'?'私人漫游':'正在播放');nativeInitialized=true;render();}
    state.trial=!!state.current&&value.durationMs>0&&value.durationMs+2000<state.current.durationMs;
-   if(changed){lastPlayError='';clearNotice();if(state.page==='playing')state.title=state.queueMode==='roam'?'私人漫游':'正在播放';render();}
+   if(changed){stopSeeking();lastPlayError='';clearNotice();if(state.page==='playing')state.title=state.queueMode==='roam'?'私人漫游':'正在播放';render();}
    if(statusChanged)renderReader();
    if(value.error){lastPlayError=value.error;footer(value.error,true);}else updateProgress();
  });
  native.ready.then(()=>updateAccount()).catch(e=>footer(e.message,true));
  native.back=()=>{const dialog=Array.from(document.querySelectorAll('dialog[open]')).at(-1);if(dialog){dialog.close();return;}if(document.body.classList.contains('options-open')){$('playerOptionsToggle').click();return;}if(state.page!=='home')menu();else native.request('finish');};
 }else if(location.protocol!=='file:')updateAccount().catch(e=>footer('离线预览 · 连接本机音乐服务后可听歌'));
-window.PocketClassicContext={state,audio,native,entries,format,action,rotate,select,render,screenAction,openReader,openHelp,feedback,openAppearance:()=>navigate('appearance','显示与动态效果'),footerText:()=>$('lcdFooter').textContent};
+window.PocketClassicContext={state,audio,native,entries,format,action,stopSeeking,rotate,select,render,screenAction,openReader,openHelp,feedback,openAppearance:()=>navigate('appearance','显示与动态效果'),footerText:()=>$('lcdFooter').textContent};

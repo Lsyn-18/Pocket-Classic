@@ -5,6 +5,7 @@ import { makeScreen } from './screen.mjs';
 import { createMotionControl } from './motion.mjs';
 import { createStudioFloor } from './studio-floor.mjs';
 import { createWheelInput } from './wheel-input.mjs';
+import {createButtonPress} from './button-press.mjs';
 import {visualBaseline,screenQuality} from './visual-profile.mjs';
 import {createStudioEnvironment} from './environment.mjs';
 import {createAtmosphere} from './atmosphere.mjs';
@@ -30,15 +31,18 @@ RectAreaLightUniformsLib.init();
 const studioCard=new THREE.RectAreaLight(0xffffff,visualBaseline?12:5.5,visualBaseline?1.8:4.5,visualBaseline?12:8);studioCard.position.set(...(visualBaseline?[-2.8,1.5,6]:[-3.8,4.2,8]));studioCard.lookAt(0,0,0);scene.add(studioCard);
 const rimLight=new THREE.RectAreaLight(0xffead1,visualBaseline?0:1.6,3,7);rimLight.position.set(5,2,6);rimLight.lookAt(0,0,0);if(!visualBaseline)scene.add(rimLight);
 const screen=makeScreen(app,{...quality,baseline:visualBaseline}),classic=createClassic(screen.texture,{baseline:visualBaseline});scene.add(classic.model);
+// Composite the original high-resolution canvas at the display's native DPR.
+// The scene's 2x budget and texture mip chain no longer soften LCD text/colors.
+if(!visualBaseline){screen.canvas.className='lcd-surface';screen.canvas.setAttribute('aria-hidden','true');host.append(screen.canvas);}
 const floor=createStudioFloor(classic.model,-D.height/2-.025,{baseline:visualBaseline});scene.add(floor.group);
 const atmosphere=createAtmosphere({scene,camera,native:!!app.native,baseline:visualBaseline});
 classic.model.rotation.set(-.008,-.025,0);
-let targetX=-.008,targetY=-.025,previous=performance.now(),gesture=null,holdTimer,seekTimer,renderedFrames=0;
+let targetX=-.008,targetY=-.025,previous=performance.now(),gesture=null,renderedFrames=0;
 const compactQuery=matchMedia('(max-width:1000px)');
 const compact=()=>!!app.native||compactQuery.matches;
 // Embedded WebView can report its viewport before percentage heights settle.
 // Anchor the native root to the viewport and refresh it on rotation or resize.
-function nativeViewport(){if(!app.native)return;const height=document.documentElement.clientHeight;document.documentElement.style.height=height+'px';document.body.style.height=height+'px';document.querySelector('.layout').style.height=height+'px';}
+function nativeViewport(){if(!app.native)return;const height=window.innerHeight;document.documentElement.style.height=height+'px';document.body.style.height=height+'px';document.querySelector('.layout').style.height=height+'px';}
 nativeViewport();window.addEventListener('resize',()=>{nativeViewport();measure();});
 const tools=document.getElementById('playerTools'),optionsToggle=document.getElementById('playerOptionsToggle');
 function closeOptions(){document.body.classList.remove('options-open');optionsToggle.setAttribute('aria-expanded','false')}
@@ -57,46 +61,53 @@ const motion=createMotionControl({source:app.native?.motion,onChange:motionUI});
 document.getElementById('playerOptionsPanel').prepend(motionButton.parentElement);
 document.getElementById('openAppearance').onclick=()=>{closeOptions();app.openAppearance();};
 document.getElementById('openHelp').onclick=()=>{closeOptions();app.openHelp();};
-document.getElementById('openReader').onclick=()=>{closeOptions();app.openReader();};
 motionButton.onclick=()=>{if(motion.state.enabled||motion.state.pending)motion.stop();else motion.start()};
 calibrateButton.onclick=()=>motion.recalibrate();
 for(const button of tools.querySelectorAll('button'))button.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')e.stopPropagation()});
 window.addEventListener('pagehide',()=>motion.stop());
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 const pointer=new THREE.Vector2(),raycaster=new THREE.Raycaster();
-function measure(){const root=document.documentElement;document.body.classList.toggle('landscape-player',root.clientWidth>root.clientHeight);const r=host.getBoundingClientRect();if(!r.width||!r.height)return;const aspect=r.width/r.height,height=compact()?Math.max(11.38,6.34/aspect):Math.max(11.75,6.65/aspect);camera.left=-height*aspect/2;camera.right=height*aspect/2;camera.top=height/2-.28;camera.bottom=-height/2-.28;camera.updateProjectionMatrix();renderer.setSize(r.width,r.height,false);host.dataset.fit=compact()?'screen':'studio'}
+function measure(){const root=document.documentElement;document.body.classList.toggle('landscape-player',root.clientWidth>root.clientHeight);const r=host.getBoundingClientRect();if(!r.width||!r.height)return;const style=getComputedStyle(host),left=parseFloat(style.paddingLeft)||0,right=parseFloat(style.paddingRight)||0,top=parseFloat(style.paddingTop)||0,bottom=parseFloat(style.paddingBottom)||0;const width=Math.max(1,r.width-left-right),height=Math.max(1,r.height-top-bottom),aspect=width/height,units=(compact()?Math.max(11.38,6.34/aspect):Math.max(11.75,6.65/aspect))/height,cx=(left+r.width-right)/2,cy=(top+r.height-bottom)/2;camera.left=-cx*units;camera.right=(r.width-cx)*units;camera.top=cy*units-.28;camera.bottom=-(r.height-cy)*units-.28;camera.updateProjectionMatrix();renderer.setSize(r.width,r.height,false);host.dataset.fit=compact()?'screen':'studio'}
 new ResizeObserver(measure).observe(host);measure();
 function pick(e){const r=host.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);raycaster.setFromCamera(pointer,camera);
   for(const hit of raycaster.intersectObject(classic.model,true)){const p=classic.model.worldToLocal(hit.point.clone()),zone=hit.object.userData.zone;if(zone==='wheel'&&Math.hypot(p.x,p.y-D.wheelY)>1.945)continue;return {point:p,zone:zone||'case'}}return null}
 function wheelAction(p){const x=p.x,y=p.y-D.wheelY;if(Math.hypot(x,y)<.70)return 'select';return Math.abs(y)>Math.abs(x)?(y>0?'menu':'play'):(x<0?'previous':'next')}
-function release(){clearTimeout(holdTimer);clearInterval(seekTimer);}
-host.addEventListener('pointerdown',e=>{if(e.button!==0)return;const hit=pick(e);if(!hit||hit.zone==='case')return;const p=hit.point;
+const press=createButtonPress({shortPress:name=>app.action(name),longPress:name=>app.action(name,true),stop:()=>app.stopSeeking()});
+const keyboardCancels=[];
+function release(){press.cancel();}
+const cancelGesture=()=>{gesture=null;release();for(const cancel of keyboardCancels)cancel();};
+host.addEventListener('pointerdown',e=>{if(e.button!==0||gesture)return;const hit=pick(e);if(!hit||hit.zone==='case')return;const p=hit.point;
   gesture={id:e.pointerId,zone:hit.zone,point:p.clone(),angle:Math.atan2(p.y-D.wheelY,p.x),sum:0,dial:createWheelInput(),moved:false,held:false,x:e.clientX,y:e.clientY,action:hit.zone==='wheel'?wheelAction(p):null};
   host.setPointerCapture(e.pointerId);
-  if(hit.zone==='wheel')holdTimer=setTimeout(()=>{if(gesture&&!gesture.moved){gesture.held=true;app.feedback('长按已触发');app.action(gesture.action,true);if(['previous','next'].includes(gesture.action))seekTimer=setInterval(()=>app.action(gesture?.action,true),180)}},480);
+  if(hit.zone==='wheel')press.start(gesture.action);
 });
 host.addEventListener('pointermove',e=>{
   if(!gesture){if(e.pointerType!=='touch'&&!motion.state.enabled&&!reducedMotion.matches&&!app.state.reducedMotion){const r=host.getBoundingClientRect();targetY=-.025+((e.clientX-r.left)/r.width-.5)*.07;targetX=-.008+((e.clientY-r.top)/r.height-.5)*.035}return}
-  if(gesture.zone!=='wheel'||app.state.hold||Math.hypot(gesture.point.x,gesture.point.y-D.wheelY)<.70)return;
+  if(e.pointerId!==gesture.id||gesture.zone!=='wheel'||app.state.hold||Math.hypot(gesture.point.x,gesture.point.y-D.wheelY)<.70)return;
   const hit=pick(e);if(hit?.zone!=='wheel')return;const a=Math.atan2(hit.point.y-D.wheelY,hit.point.x);let delta=a-gesture.angle;while(delta>Math.PI)delta-=Math.PI*2;while(delta<-Math.PI)delta+=Math.PI*2;gesture.angle=a;gesture.sum-=delta;
   if(Math.abs(gesture.sum)>.065){gesture.moved=true;release()}const step=gesture.dial.move(-delta,e.timeStamp);if(step)app.rotate(step);
 });
-host.addEventListener('pointerup',e=>{const g=gesture;release();gesture=null;if(!g||g.id!==e.pointerId||g.moved||g.held)return;
-  if(g.zone==='hold'){app.state.hold=!app.state.hold;app.render();return}if(g.zone==='wheel'){app.action(g.action);return}
+host.addEventListener('pointerup',e=>{const g=gesture;if(!g||g.id!==e.pointerId)return;gesture=null;if(g.zone==='wheel'){press.release();return;}release();if(g.moved)return;
+  if(g.zone==='hold'){app.state.hold=!app.state.hold;app.render();return}
   if(app.state.hold){app.feedback('按键已锁定 · 拨动顶部开关解锁');return;}
   if(g.zone==='screen'){const index=screen.hit((g.point.x+D.screenWidth/2)/D.screenWidth*320,(D.screenY+D.screenHeight/2-g.point.y)/D.screenHeight*240);if(typeof index==='string')app.screenAction(index);else if(index!==null){app.state.selected=index;app.select()}}
 });
-host.addEventListener('pointercancel',()=>{gesture=null;release()});host.addEventListener('pointerleave',()=>{if(!gesture){targetX=-.008;targetY=-.025}});
+for(const name of ['pointercancel','lostpointercapture'])host.addEventListener(name,cancelGesture);
+window.addEventListener('blur',cancelGesture);window.addEventListener('pagehide',cancelGesture);document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelGesture();});app.native?.motion.onVisibility(visible=>{if(!visible)cancelGesture();});
+host.addEventListener('pointerleave',()=>{if(!gesture){targetX=-.008;targetY=-.025}});
 const overlay=document.createElement('div');overlay.className='model-hit-controls';host.append(overlay);
 const hitButtons=[];
 const buttons=[['menu','MENU，长按返回主页',0,D.wheelY+1.50,.509,44,44],['previous','上一曲，长按快退',-1.50,D.wheelY,.509,44,44],['next','下一曲，长按快进',1.50,D.wheelY,.509,44,44],['play','播放暂停，长按休眠',0,D.wheelY-1.50,.509,44,44],['select','中央选择键',0,D.wheelY,.515,54,54],['hold','锁定或解锁按键',1.95,5.18,0,44,44]];
 for(const [action,label,x,y,z,w,h]of buttons){const button=document.createElement('button');button.type='button';button.setAttribute('aria-label',label);button.style.width=w+'px';button.style.height=h+'px';
   const activate=()=>{if(action==='hold'){app.state.hold=!app.state.hold;app.render()}else app.action(action)};
-  button.onclick=e=>{if(e.detail===0)activate()};button.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.stopPropagation();e.preventDefault();activate()}};
+  let keyDown=false;const keyPress=createButtonPress({shortPress:activate,longPress:()=>app.action(action,true),stop:()=>app.stopSeeking()});
+  keyboardCancels.push(()=>{keyDown=false;keyPress.cancel();});
+  button.onclick=e=>{if(e.detail===0)activate()};button.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.stopPropagation();e.preventDefault();if(!keyDown){keyDown=true;keyPress.start(action);}}};button.onkeyup=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();keyDown=false;keyPress.release();}};button.onblur=()=>{keyDown=false;keyPress.cancel();};
   overlay.append(button);hitButtons.push({button,point:new THREE.Vector3(x,y,z)})}
 const swatch=document.getElementById('frontColor');swatch.onclick=()=>{app.state.dark=!app.state.dark;app.render();swatch.setAttribute('aria-label',app.state.dark?'切换银色机身':'切换黑色机身')};
 let meshes=0,triangles=0;classic.model.traverse(o=>{if(o.isMesh){meshes++;triangles+=(o.geometry.index?.count||o.geometry.attributes.position.count)/3}});
 Object.assign(host.dataset,{webgl:'true',meshes:String(meshes),triangles:String(Math.round(triangles)),view:'front-only',dimensions:'61.8 × 103.5 × 10.5 mm',reflection:'mirrored-geometry-with-fade',shadow:'soft-contact',visualProfile:visualBaseline?'baseline':'frosted',lcdScale:String(screen.pixelScale),lcdPixels:`${screen.canvas.width}x${screen.canvas.height}`,lcdAnisotropy:String(screen.texture.anisotropy),environment:environment.resolution,particles:String(atmosphere.count)});
+host.dataset.lcdPresentation=visualBaseline?'texture':'native-compositor';
 window.PocketClassicVisual={diagnostics(){const gl=renderer.getContext();return {profile:host.dataset.visualProfile,drawCalls:renderer.info.render.calls,frameTriangles:renderer.info.render.triangles,textures:renderer.info.memory.textures,geometries:renderer.info.memory.geometries,shaderErrors,glError:gl.getError(),contextLost:gl.isContextLost(),lcdPixels:host.dataset.lcdPixels,particles:atmosphere.count};}};
 function frame(now){const dt=Math.min(.05,(now-previous)/1000);previous=now;const ease=1-Math.exp(-dt*7),reduce=reducedMotion.matches||app.state.reducedMotion;
   if(reduce){targetX=-.008;targetY=-.025;if(motion.state.enabled)motion.stop();}
@@ -105,8 +116,10 @@ function frame(now){const dt=Math.min(.05,(now-previous)/1000);previous=now;cons
   // Freeze both input and the rendered pose while using the wheel or buttons.
   if(!gesture){classic.model.rotation.x+=(x-classic.model.rotation.x)*ease;classic.model.rotation.y+=(y-classic.model.rotation.y)*ease}
   classic.model.updateMatrixWorld(true);classic.setDark(app.state.dark);classic.setHold(app.state.hold);screen.draw();
+  if(!visualBaseline){const r=host.getBoundingClientRect(),project=(x,y)=>{const p=classic.model.localToWorld(new THREE.Vector3(x,y,.530)).project(camera);return {x:(p.x*.5+.5)*r.width,y:(-p.y*.5+.5)*r.height};},tl=project(-D.screenWidth/2,D.screenY+D.screenHeight/2),tr=project(D.screenWidth/2,D.screenY+D.screenHeight/2),bl=project(-D.screenWidth/2,D.screenY-D.screenHeight/2);screen.canvas.style.transform=`matrix(${(tr.x-tl.x)/320},${(tr.y-tl.y)/320},${(bl.x-tl.x)/240},${(bl.y-tl.y)/240},${tl.x},${tl.y})`;}
   if(!visualBaseline){studioCard.position.x=-3.8+(classic.model.rotation.y+.025)*7;studioCard.position.y=4.2+(classic.model.rotation.x+.008)*5;studioCard.lookAt(0,0,0);}
   const environmentDark=document.body.classList.contains('dark');
+  document.body.classList.toggle('is-playing',!app.audio.paused&&!app.state.sleep);
   atmosphere.update(dt,{dark:environmentDark,trackId:app.state.current?.id||0,playing:!app.audio.paused,tiltX:classic.model.rotation.x+.008,tiltY:classic.model.rotation.y+.025,reducedMotion:reduce});
   floor.update(app.state.dark,atmosphere.accent,reduce?1:1+Math.sin(now*.00045)*.035);
   const r=host.getBoundingClientRect();for(const {button,point}of hitButtons){const p=classic.model.localToWorld(point.clone()).project(camera);button.style.transform=`translate(${(p.x*.5+.5)*r.width}px,${(-p.y*.5+.5)*r.height}px) translate(-50%,-50%)`}

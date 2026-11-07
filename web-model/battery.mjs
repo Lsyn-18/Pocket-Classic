@@ -1,4 +1,4 @@
-// Small, softly beveled LCD icon; the fill still follows the device's real level.
+// Saturated LCD cell; the fill follows the device's real level.
 export function drawBattery(c,battery,{x=285,y=7}={}) {
   const level=Number.isFinite(battery?.level)?Math.max(0,Math.min(1,battery.level)):null;
   const low=level!==null&&level<=.15;
@@ -10,10 +10,10 @@ export function drawBattery(c,battery,{x=285,y=7}={}) {
   c.fillStyle='#e1e6e9';c.fillRect(2,2,23,7);
   if(level!==null&&level>0){
     const fill=c.createLinearGradient(0,2,0,9);
-    fill.addColorStop(0,low?'#eda18a':'#bbda85');
-    fill.addColorStop(.46,low?'#d77a65':'#91ba58');
-    fill.addColorStop(.52,low?'#c36655':'#7fa349');
-    fill.addColorStop(1,low?'#c46d5d':'#8bb553');
+    fill.addColorStop(0,low?'#ff715d':'#53e783');
+    fill.addColorStop(.46,low?'#f04438':'#1cc45a');
+    fill.addColorStop(.52,low?'#d92c25':'#0caa43');
+    fill.addColorStop(1,low?'#ec4033':'#18bd50');
     c.fillStyle=fill;c.fillRect(2,2,23*level,7);
   }
   c.restore();

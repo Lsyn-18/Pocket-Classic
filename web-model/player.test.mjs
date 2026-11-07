@@ -4,12 +4,13 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {createRoamStream} from './roam-stream.mjs';
 import {createWheelInput} from './wheel-input.mjs';
+import {createButtonPress} from './button-press.mjs';
 import {coverUrl} from './artwork.mjs';
 import {menuMarker,listWindow,emptyContent,qualityLabel,appearanceIsDark,canAdvance} from './presentation.mjs';
 const source=fs.readFileSync(new URL('./player.mjs',import.meta.url),'utf8').replace(/^import[^\n]+\n/gm,'');
 const song=id=>({id,name:'Track '+id,artist:'Artist',durationMs:120000});
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
-function fixture(routes={}){
+function fixture(routes={},clock={}){
   const elements=new Map(),listeners=new Map();let playCount=0;
   function element(id){if(elements.has(id))return elements.get(id);const classes=new Set();const el={id,textContent:'',innerHTML:'',style:{},clientHeight:190,hidden:false,open:false,dataset:{},
     classList:{toggle(name,value){if(value)classes.add(name);else classes.delete(name);},contains:name=>classes.has(name)},
@@ -19,12 +20,30 @@ function fixture(routes={}){
   Object.assign(element('audio'),{paused:true,currentTime:0,duration:120,volume:.65,load(){},pause(){this.paused=true;},async play(){this.paused=false;playCount++;}});
   const document={getElementById:element,body:element('body'),querySelector:selector=>selector==='.device'?element('device'):null,querySelectorAll:()=>[],createElement:()=>element('spinner'),addEventListener(){}};
   const window={};const fetch=async(url,options)=>{const route=url.slice(5),handler=routes[route.split('?')[0]];const body=options?.body?JSON.parse(options.body):null;const result=handler?await handler(body,route):route==='resolve'?{url:'https://test.music.126.net/test.mp3',trial:null}:{playlists:[]};return {ok:!result.error,json:async()=>result};};
-  vm.runInNewContext(source,{window,document,navigator:{},location:{protocol:'file:'},fetch,createRoamStream,createWheelInput,coverUrl,menuMarker,listWindow,emptyContent,qualityLabel,appearanceIsDark,canAdvance,console,setTimeout,clearTimeout,setInterval,clearInterval,MediaMetadata:class{}});
+  vm.runInNewContext(source,{window,document,navigator:{},location:{protocol:'file:'},fetch,createRoamStream,createWheelInput,createButtonPress,coverUrl,menuMarker,listWindow,emptyContent,qualityLabel,appearanceIsDark,canAdvance,console,setTimeout,clearTimeout,setInterval,clearInterval,MediaMetadata:class{},...clock});
   const app=window.PocketClassicContext;app.state.connected=true;
   return {app,elements,listeners,get playCount(){return playCount;}};
 }
 test('music menu contains playlists, daily recommendations, private roaming and followed artists',async()=>{
   const {app}=fixture();await app.select();assert.equal(app.state.page,'music');assert.deepEqual(Array.from(app.entries(),x=>x.name),['我的歌单','每日推荐','私人漫游','关注的歌手']);
+});
+
+test('holding seek advances continuously, preserves pause, and release cancels further movement',()=>{
+  let now=0,id=0;const intervals=new Map();
+  const {app}=fixture({}, {Date:{now:()=>now},setInterval:fn=>(intervals.set(++id,fn),id),clearInterval:key=>intervals.delete(key)});
+  Object.assign(app.state,{current:song(1),queue:[song(1)],queueIndex:0,page:'playing'});app.audio.currentTime=20;
+  app.action('next',true);assert.equal(app.state.seeking,1);assert.equal(app.audio.paused,true);
+  now=120;[...intervals.values()][0]();assert.equal(app.audio.currentTime,21.2);
+  now=240;[...intervals.values()][0]();assert.equal(app.audio.currentTime,22.4);
+  app.stopSeeking();assert.equal(app.state.seeking,0);assert.equal(intervals.size,0);assert.equal(app.state.queueIndex,0);assert.equal(app.audio.paused,true);
+  app.action('previous',true);now=360;[...intervals.values()][0]();assert.ok(app.audio.currentTime<22.4);
+  app.state.hold=true;now=480;[...intervals.values()][0]();assert.equal(intervals.size,0);
+});
+
+test('seek stays in the current track and cancels on a track change',()=>{
+  let now=0,id=0;const intervals=new Map();const {app}=fixture({}, {Date:{now:()=>now},setInterval:fn=>(intervals.set(++id,fn),id),clearInterval:key=>intervals.delete(key)});
+  Object.assign(app.state,{current:song(1),queue:[song(1),song(2)],page:'playing'});app.audio.currentTime=119.7;app.action('next',true);now=240;[...intervals.values()][0]();assert.equal(app.audio.currentTime,119.75);assert.equal(app.state.current.id,1);
+  app.state.current=song(2);now=360;[...intervals.values()][0]();assert.equal(app.state.seeking,0);assert.equal(intervals.size,0);
 });
 test('daily tracks can be selected and remain a normal finite playback queue',async()=>{
   const {app}=fixture({daily:()=>({tracks:[song(10),song(11)]})});await app.select();app.state.selected=1;await app.select();assert.equal(app.state.title,'每日推荐');

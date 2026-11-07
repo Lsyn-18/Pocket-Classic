@@ -12,9 +12,19 @@ export function createNativePlatform(transport, host = window) {
   function fire(method,args={}) { request(method,args).catch(()=>{}); }
   const events=new EventTarget();
   let position=0,duration=NaN,volume=.65,paused=true,readyState=0,error=null;
+  let seeking=false,seekTarget=null,seekBusy=false,seekGeneration=0,seekSettleUntil=0;
+  function resetSeek(){seeking=false;seekTarget=null;++seekGeneration;}
+  async function flushSeek(){
+    if(seekBusy||seekTarget===null)return;
+    const target=seekTarget,generation=seekGeneration;seekBusy=true;
+    try{await request('seek',{positionMs:Math.round(target*1000)});}
+    catch{if(generation===seekGeneration)seekTarget=null;}
+    finally{seekBusy=false;if(seekTarget!==null&&(generation!==seekGeneration||seekTarget!==target))flushSeek();}
+  }
   const audio={
     addEventListener:(...args)=>events.addEventListener(...args),
-    get currentTime(){return position;},set currentTime(value){position=Math.max(0,Number(value)||0);fire('seek',{positionMs:Math.round(position*1000)});events.dispatchEvent(new Event('timeupdate'));},
+    get currentTime(){return position;},set currentTime(value){position=Math.max(0,Number(value)||0);seekTarget=position;seekSettleUntil=Date.now()+1500;flushSeek();events.dispatchEvent(new Event('timeupdate'));},
+    beginSeek(){seeking=true;},endSeek(){seeking=false;seekSettleUntil=Date.now()+1500;},
     get duration(){return duration;},get paused(){return paused;},get readyState(){return readyState;},get error(){return error;},
     get volume(){return volume;},set volume(value){volume=Math.max(0,Math.min(1,Number(value)||0));fire('volume',{value:volume});events.dispatchEvent(new Event('volumechange'));},
     pause(){paused=true;fire('pause');events.dispatchEvent(new Event('pause'));},
@@ -24,7 +34,12 @@ export function createNativePlatform(transport, host = window) {
   function snapshot(value) {
     if(transitioning)return;
     const previousPaused=paused,previousDuration=duration;
-    position=Math.max(0,(value.positionMs||0)/1000);duration=value.durationMs>0?value.durationMs/1000:NaN;
+    const changed=lastSnapshot&&(Object.hasOwn(value,'current')&&value.current?.id!==lastSnapshot.current?.id||value.index!==undefined&&value.index!==lastSnapshot.index);
+    if(changed)resetSeek();
+    const reported=Math.max(0,(value.positionMs||0)/1000);
+    // Media3 snapshots already in transit must not rewind the optimistic scrub.
+    if(seekTarget===null||!seeking&&(!seekBusy&&Math.abs(reported-seekTarget)<1||Date.now()>seekSettleUntil)){position=reported;if(!seeking)seekTarget=null;}
+    duration=value.durationMs>0?value.durationMs/1000:NaN;
     volume=Number.isFinite(value.volume)?value.volume:volume;paused=!value.playing;readyState=value.ready?4:value.buffering?2:0;
     error=value.error?{code:4,message:value.error}:null;
     lastSnapshot={...lastSnapshot,...value};
@@ -34,10 +49,10 @@ export function createNativePlatform(transport, host = window) {
     if(previousDuration!==duration)events.dispatchEvent(new Event('durationchange'));
   }
   const platform={
-    audio,request,get transitioning(){return transitioning;},beginTransition(){transitioning=true;},
+    audio,request,get transitioning(){return transitioning;},beginTransition(){resetSeek();transitioning=true;},
     api:route=>request('api',{route}),openConnection:()=>request('connection'),
     async playQueue(tracks,index,mode,options){
-      transitioning=true;
+      resetSeek();transitioning=true;
       try{const value=await request('queue',{tracks,index,mode,...options});transitioning=false;snapshot(value);}
       catch(error){transitioning=false;throw error;}
     },

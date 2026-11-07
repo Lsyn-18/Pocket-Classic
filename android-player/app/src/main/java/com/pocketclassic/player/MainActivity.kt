@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +20,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
@@ -79,6 +79,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        if (Build.VERSION.SDK_INT >= 28) window.attributes = window.attributes.apply {
+            layoutInDisplayCutoutMode = if (Build.VERSION.SDK_INT >= 30)
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            else WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
         val vm = ViewModelProvider(this)[PlayerViewModel::class.java]
         var error by mutableStateOf("")
         playerHost = NativePlayerHost(this, vm, ::notificationPermission) { error = it }
@@ -89,7 +94,7 @@ class MainActivity : ComponentActivity() {
             val state = vm.state
             val darkAppearance = state.theme == "dark" || state.theme == "auto" && isSystemInDarkTheme()
             MaterialTheme(colorScheme = if(darkAppearance) darkColorScheme(primary=Color(0xFF9ACBFA),surface=Color(0xFF1D2835),onSurface=Color(0xFFE5EDF6),onSurfaceVariant=Color(0xFFB9CADB)) else lightColorScheme(primary=Color(0xFF246AB4),surface=Color(0xFFF8FAFC),onSurface=Color(0xFF263F54),onSurfaceVariant=Color(0xFF4C6379))) {
-                Box(Modifier.fillMaxSize().background(Color(0xFFF7F9FC)).safeDrawingPadding()) {
+                Box(Modifier.fillMaxSize().background(if(darkAppearance) Color(0xFF101B2B) else Color(0xFFF7F9FC))) {
                     AndroidView(factory = { playerHost.webView }, modifier = Modifier.fillMaxSize())
                 }
                 if (state.showConnection) NetEaseLoginDialog(state,
