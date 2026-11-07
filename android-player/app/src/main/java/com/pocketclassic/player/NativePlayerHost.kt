@@ -2,6 +2,8 @@ package com.pocketclassic.player
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.media.AudioManager
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
@@ -34,7 +36,20 @@ class NativePlayerHost(
     private val artwork = NativeArtwork()
     val webView: WebView
     init {
-        webView = WebView(activity).apply {
+        webView = object : WebView(activity) {
+            override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+                val direction = when(event.keyCode) {
+                    KeyEvent.KEYCODE_VOLUME_UP -> AudioManager.ADJUST_RAISE
+                    KeyEvent.KEYCODE_VOLUME_DOWN -> AudioManager.ADJUST_LOWER
+                    else -> return super.dispatchKeyEvent(event)
+                }
+                // Consume both edges before web content handles these keys.
+                if(event.action == KeyEvent.ACTION_DOWN) {
+                    vm.adjustMediaVolume(direction); playback()
+                }
+                return true
+            }
+        }.apply {
             setBackgroundColor(Color.rgb(247,249,252)); overScrollMode = View.OVER_SCROLL_NEVER
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = false
@@ -71,7 +86,7 @@ class NativePlayerHost(
             var loaded = false
             addOnLayoutChangeListener { _, left, top, right, bottom, _, _, _, _ ->
                 if (!loaded && right > left && bottom > top) {
-                    loaded = true; loadUrl(NativeContract.ORIGIN + NativeContract.PLAYER_PATH)
+                    loaded = true; requestFocus(); loadUrl(NativeContract.ORIGIN + NativeContract.PLAYER_PATH)
                 }
             }
         }
@@ -91,7 +106,8 @@ class NativePlayerHost(
                     "connection" -> { vm.showConnection(); JSONObject() }
                     "localScan", "localImport", "localFolder" -> localAction(method, args.optString("category", "device"))
                     "queue" -> { beforePlay(); vm.startQueue(args); revision = vm.queueRevision; vm.snapshot(true) }
-                    "play", "pause", "next", "previous", "seek", "volume", "configure" -> {
+                    "volume" -> vm.setMediaVolume(args.getDouble("value"))
+                    "play", "pause", "next", "previous", "seek", "configure" -> {
                         if (method == "play") beforePlay()
                         vm.command(method, args); JSONObject()
                     }
@@ -124,6 +140,7 @@ class NativePlayerHost(
         if (destroyed) return
         foreground = true; webView.resumeTimers(); webView.onResume()
         emit(JSONObject().put("type", "lifecycle").put("visible", true)); motion.foreground(true); battery.start()
+        playback()
     }
     fun pause() {
         foreground = false; motion.foreground(false); battery.stop()

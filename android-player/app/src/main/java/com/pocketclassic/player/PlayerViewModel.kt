@@ -46,6 +46,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var openingClaimed = false
     fun claimOpening(): Boolean = (!openingClaimed).also { openingClaimed = true }
     private val store = MusicSessionStore(application)
+    private val mediaVolume = NativeMediaVolume(application)
     private val api = NetEaseApi(store)
     val localMusic = LocalMusicLibrary(application)
     private var loginJob: Job? = null
@@ -65,7 +66,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
     init {
         controllerFuture.addListener({
-            runCatching { controllerFuture.get() }.onSuccess { controller = it; it.addListener(listener); queueRevision++ }
+            runCatching { controllerFuture.get() }.onSuccess { controller = it; it.volume = 1f; it.addListener(listener); queueRevision++ }
                 .onFailure { state = state.copy(message = "播放器未能启动，请重新打开应用") }
         }, ContextCompat.getMainExecutor(application))
         if (store.read() != null) refreshAccount()
@@ -162,7 +163,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val c = player()
         c.shuffleModeEnabled = mode != "roam" && data.optBoolean("shuffle")
         c.repeatMode = if (mode == "roam") Player.REPEAT_MODE_OFF else data.optInt("repeat").coerceIn(0,2)
-        c.volume = data.optDouble("volume", .65).toFloat().coerceIn(0f,1f)
+        // The phone media stream owns loudness; no second per-player attenuation.
+        c.volume = 1f
         c.setMediaItems(items, index, 0L); c.prepare(); c.play()
     }
     suspend fun command(method: String, args: JSONObject) {
@@ -177,7 +179,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             }
             "previous" -> if (c.currentPosition > 3000 || !c.hasPreviousMediaItem()) c.seekTo(0) else c.seekToPreviousMediaItem()
             "seek" -> c.seekTo(args.optLong("positionMs").coerceIn(0, c.duration.takeIf { it > 0 && it != C.TIME_UNSET } ?: Long.MAX_VALUE))
-            "volume" -> c.volume = args.optDouble("value", .65).toFloat().coerceIn(0f,1f)
             "configure" -> if (c.currentMediaItem?.mediaMetadata?.extras?.getString("mode") != "roam") {
                 c.shuffleModeEnabled = args.optBoolean("shuffle")
                 c.repeatMode = args.optInt("repeat").coerceIn(0,2)
@@ -187,13 +188,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun preferences(data: JSONObject) { val quality=data.optString("quality",store.quality);require(MusicQuality.valid(quality));store.dark = data.optBoolean("dark"); store.haptics = data.optBoolean("haptics", true);store.quality=quality
         val theme=data.optString("theme",store.theme);require(theme in setOf("auto","light","dark"));store.theme=theme;store.largeText=data.optBoolean("largeText",store.largeText);store.reducedMotion=data.optBoolean("reducedMotion",store.reducedMotion);if(state.theme!=theme)state=state.copy(theme=theme)
     }
+    fun setMediaVolume(level: Double): JSONObject {
+        val actual = mediaVolume.set(level)
+        controller?.volume = 1f
+        return JSONObject().put("volume", actual.level).put("volumeStep", actual.step)
+    }
+    fun adjustMediaVolume(direction: Int) {
+        mediaVolume.adjust(direction)
+        controller?.volume = 1f
+    }
     fun snapshot(includeQueue: Boolean): JSONObject {
         val c = controller; val item = c?.currentMediaItem; val extra = item?.mediaMetadata?.extras
+        val output = mediaVolume.read()
         val duration = c?.duration?.takeIf { it > 0 && it != C.TIME_UNSET } ?: 0
         val radioError = if (c?.sessionExtras?.getString("roamSession") == extra?.getString("queueSession")) c?.sessionExtras?.getString("roamError", "") else ""
         val result = JSONObject().put("positionMs", c?.currentPosition?.coerceAtLeast(0) ?: 0).put("durationMs", duration)
             .put("playing", c?.playWhenReady ?: false).put("ready", c?.playbackState == Player.STATE_READY)
-            .put("buffering", c?.playbackState == Player.STATE_BUFFERING).put("volume", c?.volume ?: .65f)
+            .put("buffering", c?.playbackState == Player.STATE_BUFFERING).put("volume", output.level).put("volumeStep", output.step)
             .put("index", c?.currentMediaItemIndex?.coerceAtLeast(0) ?: 0).put("count", c?.mediaItemCount ?: 0)
             .put("mode", extra?.getString("mode") ?: "playlist").put("shuffle", c?.shuffleModeEnabled ?: false)
             .put("repeat", c?.repeatMode ?: 0).put("dark", store.dark).put("haptics", store.haptics)

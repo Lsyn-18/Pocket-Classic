@@ -11,7 +11,24 @@ export function createNativePlatform(transport, host = window) {
   }
   function fire(method,args={}) { request(method,args).catch(()=>{}); }
   const events=new EventTarget();
-  let position=0,duration=NaN,volume=.65,paused=true,readyState=0,error=null;
+  let position=0,duration=NaN,volume=0,volumeStep=0,paused=true,readyState=0,error=null;
+  let volumeTarget=null,volumeBusy=false,volumeGeneration=0;
+  function systemVolume(value,apply=volumeTarget===null){
+    if(Number.isFinite(value.volumeStep))volumeStep=Math.max(0,Math.min(1,value.volumeStep));
+    if(!apply||!Number.isFinite(value.volume))return;
+    const actual=Math.max(0,Math.min(1,value.volume));
+    if(actual!==volume){volume=actual;events.dispatchEvent(new Event('volumechange'));}
+  }
+  async function flushVolume(){
+    if(volumeBusy||volumeTarget===null)return;
+    const target=volumeTarget,generation=volumeGeneration;volumeBusy=true;
+    try{
+      const actual=await request('volume',{value:target});
+      if(generation===volumeGeneration){volumeTarget=null;systemVolume(actual);}
+      else systemVolume(actual,false);
+    }catch{if(generation===volumeGeneration)volumeTarget=null;}
+    finally{volumeBusy=false;if(volumeTarget!==null)flushVolume();}
+  }
   let seeking=false,seekTarget=null,seekBusy=false,seekGeneration=0,seekSettleUntil=0;
   function resetSeek(){seeking=false;seekTarget=null;++seekGeneration;}
   async function flushSeek(){
@@ -26,12 +43,15 @@ export function createNativePlatform(transport, host = window) {
     get currentTime(){return position;},set currentTime(value){position=Math.max(0,Number(value)||0);seekTarget=position;seekSettleUntil=Date.now()+1500;flushSeek();events.dispatchEvent(new Event('timeupdate'));},
     beginSeek(){seeking=true;},endSeek(){seeking=false;seekSettleUntil=Date.now()+1500;},
     get duration(){return duration;},get paused(){return paused;},get readyState(){return readyState;},get error(){return error;},
-    get volume(){return volume;},set volume(value){volume=Math.max(0,Math.min(1,Number(value)||0));fire('volume',{value:volume});events.dispatchEvent(new Event('volumechange'));},
+    get volumeStep(){return volumeStep;},
+    get volume(){return volume;},set volume(value){const next=Math.max(0,Math.min(1,Number(value)||0));if(next===volume&&volumeTarget===null)return;volume=next;volumeTarget=next;++volumeGeneration;events.dispatchEvent(new Event('volumechange'));flushVolume();},
     pause(){paused=true;fire('pause');events.dispatchEvent(new Event('pause'));},
     async play(){await request('play');paused=false;events.dispatchEvent(new Event('play'));},
     load(){},removeAttribute(){},
   };
   function snapshot(value) {
+    // Phone media volume is independent of playback/queue transitions.
+    systemVolume(value);
     if(transitioning)return;
     const previousPaused=paused,previousDuration=duration;
     const changed=lastSnapshot&&(Object.hasOwn(value,'current')&&value.current?.id!==lastSnapshot.current?.id||value.index!==undefined&&value.index!==lastSnapshot.index);
@@ -40,7 +60,7 @@ export function createNativePlatform(transport, host = window) {
     // Media3 snapshots already in transit must not rewind the optimistic scrub.
     if(seekTarget===null||!seeking&&(!seekBusy&&Math.abs(reported-seekTarget)<1||Date.now()>seekSettleUntil)){position=reported;if(!seeking)seekTarget=null;}
     duration=value.durationMs>0?value.durationMs/1000:NaN;
-    volume=Number.isFinite(value.volume)?value.volume:volume;paused=!value.playing;readyState=value.ready?4:value.buffering?2:0;
+    paused=!value.playing;readyState=value.ready?4:value.buffering?2:0;
     error=value.error?{code:4,message:value.error}:null;
     lastSnapshot={...lastSnapshot,...value};
     playbackListener?.(lastSnapshot);
@@ -54,7 +74,8 @@ export function createNativePlatform(transport, host = window) {
     localAction:(method,category)=>request(method,{category}),
     async playQueue(tracks,index,mode,options){
       resetSeek();transitioning=true;
-      try{const value=await request('queue',{tracks:mode==='local'?tracks.map(t=>({id:t.id})):tracks,index,mode,...options});transitioning=false;snapshot(value);}
+      const {volume:ignoredVolume,...playbackOptions}=options||{};
+      try{const value=await request('queue',{tracks:mode==='local'?tracks.map(t=>({id:t.id})):tracks,index,mode,...playbackOptions});transitioning=false;snapshot(value);}
       catch(error){transitioning=false;throw error;}
     },
     next:()=>request('next'),previous:()=>request('previous'),configure:options=>fire('configure',options),

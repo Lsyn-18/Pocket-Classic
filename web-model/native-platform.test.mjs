@@ -31,6 +31,7 @@ test('a queue transition ignores old snapshots until the new native queue is ack
   const f=await fixture(),snapshots=[];f.platform.onPlayback(value=>snapshots.push(value));snapshots.length=0;
   f.platform.beginTransition();f.platform.receive({type:'playback',value:{current:{id:1},tracks:[{id:1}],index:0,count:1}});assert.equal(snapshots.length,0);
   const pending=f.platform.playQueue([{id:9}],0,'daily',{volume:.65});const message=f.messages.at(-1);assert.equal(message.method,'queue');
+  assert.equal(message.args.volume,undefined,'Starting a queue must not restore a second volume value');
   f.respond(message,{current:{id:9},tracks:[{id:9}],index:0,count:1,mode:'daily'});await pending;assert.equal(snapshots.at(-1).current.id,9);assert.equal(f.platform.transitioning,false);
 });
 test('failed native queue changes release the transition fence',async()=>{
@@ -40,6 +41,31 @@ test('seek, volume, pause and next become native commands',async()=>{
   const f=await fixture();f.platform.audio.currentTime=15;assert.deepEqual(f.messages.at(-1).args,{positionMs:15000});
   f.platform.audio.volume=5;assert.deepEqual(f.messages.at(-1).args,{value:1});f.platform.audio.pause();assert.equal(f.messages.at(-1).method,'pause');
   const next=f.platform.next();f.respond(f.messages.at(-1));await next;assert.equal(f.messages.at(-1).method,'next');
+});
+
+test('system media volume changes notify the UI even while a queue is loading',async()=>{
+  const f=await fixture();let changes=0;f.platform.audio.addEventListener('volumechange',()=>changes++);
+  f.platform.receive({type:'playback',value:{volume:.2,volumeStep:1/15}});
+  assert.equal(f.platform.audio.volume,.2);assert.equal(f.platform.audio.volumeStep,1/15);assert.equal(changes,1);
+  f.platform.beginTransition();f.platform.receive({type:'playback',value:{volume:.4,volumeStep:1/15}});
+  assert.equal(f.platform.audio.volume,.4);assert.equal(changes,2);
+});
+
+test('fast wheel volume changes coalesce and older readings cannot rewind the pending target',async()=>{
+  const f=await fixture(),a=f.platform.audio;a.volume=.2;const first=f.messages.at(-1);a.volume=.4;a.volume=.7;
+  assert.equal(f.messages.filter(m=>m.method==='volume').length,1);
+  f.platform.receive({type:'playback',value:{volume:.1}});assert.equal(a.volume,.7);
+  f.respond(first,{volume:.2,volumeStep:1/15});await new Promise(resolve=>setImmediate(resolve));
+  const last=f.messages.at(-1);assert.deepEqual(last.args,{value:.7});assert.equal(a.volume,.7);
+  f.respond(last,{volume:11/15,volumeStep:1/15});await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(a.volume,11/15);assert.equal(a.volumeStep,1/15);
+});
+
+test('volume acknowledgements use actual system quantization and failed writes resume system readings',async()=>{
+  const f=await fixture(),a=f.platform.audio;a.volume=.18;
+  f.respond(f.messages.at(-1),{volume:3/15,volumeStep:1/15});await new Promise(resolve=>setImmediate(resolve));assert.equal(a.volume,3/15);
+  a.volume=.8;f.respond(f.messages.at(-1),{},'Unable to change volume');await new Promise(resolve=>setImmediate(resolve));
+  f.platform.receive({type:'playback',value:{volume:.4}});assert.equal(a.volume,.4);
 });
 
 test('native scrubbing keeps its target across stale snapshots and coalesces pending seeks',async()=>{

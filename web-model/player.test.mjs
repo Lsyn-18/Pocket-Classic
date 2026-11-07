@@ -146,3 +146,9 @@ test('requested quality and actual downgraded audio quality remain distinct',asy
   const {app}=fixture({daily:()=>({tracks:[song(7)]}),resolve:()=>({url:'https://test.music.126.net/song.mp3',level:'standard'})});
   app.state.quality='hires';await app.select();await choose(app,'每日推荐');await app.select();assert.equal(app.state.actualQuality,'standard');assert.equal(app.state.quality,'hires');assert.equal(app.state.buffering,false);
 });
+
+test('the wheel uses at least one real phone volume step while browser audio keeps four percent steps',()=>{
+  const {app}=fixture({}, {},true);app.state.page='playing';app.state.mode='volume';app.audio.volume=0;app.audio.volumeStep=1/7;
+  app.rotate(1);assert.equal(app.audio.volume,1/7);app.rotate(-1);assert.equal(app.audio.volume,0);
+  const browser=fixture().app;browser.state.page='playing';browser.audio.volume=0;browser.rotate(1);assert.equal(browser.audio.volume,.04);
+});

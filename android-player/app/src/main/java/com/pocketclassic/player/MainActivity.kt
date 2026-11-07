@@ -6,6 +6,7 @@ import android.os.Build
 import android.os.Bundle
 import android.content.Intent
 import android.graphics.Bitmap
+import android.media.AudioManager
 import android.net.Uri
 import android.view.WindowManager
 import android.widget.Toast
@@ -78,6 +79,7 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        volumeControlStream = AudioManager.STREAM_MUSIC
         enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= 28) window.attributes = window.attributes.apply {
             layoutInDisplayCutoutMode = if (Build.VERSION.SDK_INT >= 30)

@@ -124,7 +124,7 @@ function refillRoam(){
  roamFill=task;task.finally(()=>{if(roamFill===task)roamFill=null});return task;
 }
 function menu(home=false){if(state.hold){feedback('按键已锁定 · 拨动顶部开关解锁');return;}clearNotice();if(state.sleep){state.sleep=false;render();return}++requestEpoch;state.busy=false;if(home||!state.history.length){state.page='home';state.title='iPod';state.selected=0;state.history=[]}else Object.assign(state,state.history.pop());render()}
-function rotate(delta){if(state.hold||state.busy)return;if(state.sleep){state.sleep=false;render();return}if(state.page==='playing'){tick();if(state.mode==='seek')seek(delta*3);else audio.volume=Math.max(0,Math.min(1,audio.volume+delta*.04));updateProgress()}else{const selected=Math.max(0,Math.min(entries().length-1,state.selected+delta));if(selected!==state.selected){state.selected=selected;tick();render()}}}
+function rotate(delta){if(state.hold||state.busy)return;if(state.sleep){state.sleep=false;render();return}if(state.page==='playing'){tick();if(state.mode==='seek')seek(delta*3);else audio.volume=Math.max(0,Math.min(1,audio.volume+delta*Math.max(.04,audio.volumeStep||0)));updateProgress()}else{const selected=Math.max(0,Math.min(entries().length-1,state.selected+delta));if(selected!==state.selected){state.selected=selected;tick();render()}}}
 function seek(seconds){if(state.current&&Number.isFinite(audio.duration)){audio.currentTime=Math.max(0,Math.min(audio.duration,audio.currentTime+seconds));updateProgress()}}
 let seekingTimer=null;
 function stopSeeking(){clearInterval(seekingTimer);seekingTimer=null;if(state.seeking){state.seeking=0;audio.endSeek?.();state.feedback='';}}

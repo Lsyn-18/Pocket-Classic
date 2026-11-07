@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/branding/pocket-classic-icon.svg" width="128" alt="Pocket Classic 白银色软件图标"></p>
 
-> 当前版本为 **Android 0.8.1 独立测试版**，在新版五视图模型上整合 5 秒「转轮序章」：两圈银环原位交接真实转轮，连续拉远到整机，LCD 亮起后停留 0.8 秒。支持跳过、减少动态效果和后台恢复，小米 Android 16 真机短时开场采样约 60 fps。见 [开场设计与验证](docs/WHEEL-OPENING.md)。下载 [Android 0.8.1 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.8.1)，附 SHA-256 校验文件与单文件动画预览。
+> 当前版本为 **Android 0.8.2 独立测试版**，转轮、界面和手机音量键统一使用系统媒体音量，支持双向同步、静音和前后台恢复。保留新版模型上的 5 秒「转轮序章」，LCD 亮起后停留 0.8 秒。见 [音量同步与验证](docs/VOLUME-SYNC.md)、[开场设计](docs/WHEEL-OPENING.md)。下载 [Android 0.8.2 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.8.2)，附 SHA-256 校验文件与单文件应用预览。
 
 **把熟悉的转轮和网易云音乐，放进一个口袋播放器。**
 
@@ -22,7 +22,7 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
 
 <p align="center"><img src="docs/images/frosted-silver.png" width="240" alt="冷银摄影棚：磨砂金属、高清 LCD 与柔和倒影"><img src="docs/images/frosted-black.png" width="240" alt="深色磨砂机身与低饱和摄影棚背景"></p>
 
-1. 下载并安装 [Android 0.8.1 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.8.1)。
+1. 下载并安装 [Android 0.8.2 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.8.2)。
 2. 点击底部「连接网易云」，再点击「保存并打开网易云」。
 3. 在网易云「扫一扫 → 相册」选择刚保存的二维码，确认授权后返回播放器。
 4. 进入「音乐」选择喜欢的音乐、我的歌单、每日推荐或私人漫游。离线音乐可直接进入「手机本地音乐」导入，不需要登录。
