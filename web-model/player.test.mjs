@@ -36,11 +36,12 @@ test('liked songs have their own paged list and playback source',async()=>{
   await app.select();await choose(app,'喜欢的音乐');assert.equal(app.state.tracksSource,'liked');app.state.selected=1;await app.select();assert.deepEqual(Array.from(app.state.tracks,t=>t.id),[3,4]);app.state.selected=1;await app.select();assert.equal(app.state.queueMode,'liked');assert.equal(app.state.current.id,4);
 });
 
-test('both offline libraries stay independent and playable without a cloud connection',async()=>{
+test('local library keeps previously imported downloads playable without a cloud connection',async()=>{
   const tracks=[{...song(-1),category:'netease',local:true,format:'FLAC'},{...song(-2),category:'device',local:true,format:'WAV'}];
   const {app,nativeCalls}=fixture({status:()=>({error:'offline'}),local:()=>({tracks,permissionGranted:false})},{},true);await flush();assert.equal(app.state.connected,false);assert.equal(app.state.problem,null);
-  await app.select();await choose(app,'网易云已下载');assert.deepEqual(Array.from(app.entries().slice(3),t=>t.id),[-1]);app.state.selected=3;await app.select();assert.equal(app.state.queueMode,'local');assert.equal(nativeCalls.at(-1).mode,'local');assert.equal(nativeCalls.at(-1).tracks[0].id,-1);
-  app.action('menu');app.action('menu');await choose(app,'手机本地音乐');assert.deepEqual(Array.from(app.entries().slice(3),t=>t.id),[-2]);app.state.selected=1;await app.select();assert.equal(nativeCalls.at(-1).category,'device');assert.equal(nativeCalls.some(c=>c.method==='login'),false);
+  await app.select();assert.equal(app.entries().some(e=>e.id==='netease'),false);await choose(app,'手机本地音乐');assert.deepEqual(Array.from(app.entries().slice(3),t=>t.id),[-1,-2]);
+  app.state.selected=4;await app.select();assert.equal(app.state.queueMode,'local');assert.equal(nativeCalls.at(-1).mode,'local');assert.equal(nativeCalls.at(-1).index,1);assert.deepEqual(Array.from(nativeCalls.at(-1).tracks,t=>t.id),[-1,-2]);
+  app.action('menu');app.state.selected=1;await app.select();assert.equal(nativeCalls.at(-1).category,'device');assert.equal(nativeCalls.some(c=>c.method==='login'),false);
 });
 
 test('top icon offers pause during playback and play when paused',async()=>{
@@ -49,7 +50,7 @@ test('top icon offers pause during playback and play when paused',async()=>{
   app.state.current=null;app.render();assert.equal(elements.get('playIndicator').style.display,'none');
 });
 test('music menu contains playlists, daily recommendations, private roaming and followed artists',async()=>{
-  const {app}=fixture();await app.select();assert.equal(app.state.page,'music');assert.deepEqual(Array.from(app.entries(),x=>x.name),['喜欢的音乐','我的歌单','网易云已下载','手机本地音乐','每日推荐','私人漫游','关注的歌手']);
+  const {app}=fixture();await app.select();assert.equal(app.state.page,'music');assert.deepEqual(Array.from(app.entries(),x=>x.name),['喜欢的音乐','我的歌单','手机本地音乐','每日推荐','私人漫游','关注的歌手']);
 });
 
 test('holding seek advances continuously, preserves pause, and release cancels further movement',()=>{

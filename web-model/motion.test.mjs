@@ -33,18 +33,23 @@ test('hand tremor inside three degrees produces no tilt', () => {
     assert.equal(degrees(tilt.step(.016, 600 + i * 16)), 0);
   }
 });
-test('a 15 degree physical tilt gives a restrained 1.44 degree model tilt', () => {
+test('a 15 degree physical tilt gives a clearly visible 5.76 degree model tilt', () => {
   const pose = settle(calibrated(), 60, 5);
-  assert.ok(Math.abs(degrees(pose) - 1.44) < .002);
+  assert.ok(Math.abs(degrees(pose) - 5.76) < .002);
 });
-test('horizontal movement has a little more travel while vertical motion stays restrained', () => {
+test('horizontal movement reaches 8.64 degrees at a natural 15 degree phone tilt and caps at 12', () => {
   const pose = settle(calibrated(), 45, 20);
-  assert.ok(Math.abs(pose.y * 180 / Math.PI - 2.192727) < .002);
+  assert.ok(Math.abs(pose.y * 180 / Math.PI - 8.64) < .002);
   assert.ok(Math.abs(pose.x) < 1e-10);
   for (const gamma of [-80, 80]) {
     const extreme = settle(calibrated(), 45, gamma);
-    assert.ok(Math.abs(Math.abs(extreme.y) * 180 / Math.PI - 3.35) < .002);
+    assert.ok(Math.abs(Math.abs(extreme.y) * 180 / Math.PI - 12) < .002);
   }
+});
+test('a normal tilt becomes visible within half a second and vertical travel caps at eight degrees', () => {
+  assert.ok(degrees(settle(calibrated(),60,5,0,.5))>4.5);
+  assert.ok(degrees(settle(calibrated(),45,20,0,.5))>6);
+  assert.ok(Math.abs(degrees(settle(calibrated(),140,5))-8)<.002);
 });
 test('large diagonal movement stays inside the horizontal-expanded tilt envelope', () => {
   const pose = settle(calibrated(), 140, 80);
@@ -78,8 +83,8 @@ test('landscape rotates the axes and turning the screen resets the reference', (
   for (const angle of [-90,90]) {
     const horizontal=settle(calibrated(45,0,angle),60,0,angle);
     const vertical=settle(calibrated(45,0,angle),45,15,angle);
-    assert.ok(Math.abs(Math.abs(horizontal.y)*180/Math.PI-2.192727)<.002);
-    assert.ok(Math.abs(Math.abs(vertical.x)*180/Math.PI-1.44)<.002);
+    assert.ok(Math.abs(Math.abs(horizontal.y)*180/Math.PI-8.64)<.002);
+    assert.ok(Math.abs(Math.abs(vertical.x)*180/Math.PI-5.76)<.002);
   }
   const tilt = calibrated(); tilt.push(45, 5, 90, 650);
   assert.equal(tilt.base, null);
