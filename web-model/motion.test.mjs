@@ -3,6 +3,21 @@ import assert from 'node:assert/strict';
 import {QuietTilt, MOTION, createMotionControl} from './motion.mjs';
 
 const degrees = pose => Math.hypot(pose.x, pose.y) * 180 / Math.PI;
+const product=(a,b)=>[a[3]*b[0]+a[0]*b[3]+a[1]*b[2]-a[2]*b[1],a[3]*b[1]-a[0]*b[2]+a[1]*b[3]+a[2]*b[0],a[3]*b[2]+a[0]*b[1]-a[1]*b[0]+a[2]*b[3],a[3]*b[3]-a[0]*b[0]-a[1]*b[1]-a[2]*b[2]];
+const axis=(x,y,z,degrees)=>{const a=degrees*Math.PI/360;return [x*Math.sin(a),y*Math.sin(a),z*Math.sin(a),Math.cos(a)]};
+function quaternionCalibration(q){const tilt=new QuietTilt();for(let t=0;t<=600;t+=50)tilt.push(89,0,0,t,q);return tilt;}
+
+test('native orientation near upright uses continuous rotation even when equivalent Euler angles flip',()=>{
+  const base=axis(1,0,0,89),tilt=quaternionCalibration(base);
+  const q=product(base,axis(0,1,0,15));tilt.push(89,15,0,616,q);const before=tilt.step(.016,616);
+  tilt.push(91,-165,0,632,q);const after=tilt.step(.016,632);
+  assert.ok(Math.hypot(after.x-before.x,after.y-before.y)<1e-10,'Equivalent Euler representations must not move the model');
+  assert.ok(Math.abs(after.y*180/Math.PI-8.64)<.002);
+});
+test('native quaternion sign changes and upright crossing have no one-frame flash',()=>{
+  const base=axis(1,0,0,89),tilt=quaternionCalibration(base);let last={x:0,y:0};
+  for(let i=1;i<=80;i++){const q=product(base,axis(1,0,0,i*.1));const signed=i%2?q:q.map(v=>-v);tilt.push(i%2?89:91,i%2?0:180,0,600+i*10,signed);const pose=tilt.step(.01,600+i*10);assert.ok(Math.hypot(pose.x-last.x,pose.y-last.y)*180/Math.PI<.1);last=pose;}
+});
 function calibrated(beta = 45, gamma = 5, angle = 0) {
   const tilt = new QuietTilt();
   for (let t = 0; t <= 600; t += 50) tilt.push(beta, gamma, angle, t);
@@ -179,4 +194,14 @@ test('native sensor source works without browser sensor APIs and recalibrates af
   for(let time=0;time<=600;time+=50){e.emit(0,0,time);receive({beta:45,gamma:5,angle:0});}
   assert.equal(control.state.phase,'active');visibility(false);assert.equal(control.state.phase,'paused');assert.equal(receive,null);
   visibility(true);assert.equal(control.state.phase,'calibrating');assert.ok(receive);control.destroy();assert.equal(visibility,null);assert.ok(unsubscribed>=2);
+});
+
+test('the native event path forwards quaternions and stays continuous across Euler flips',async()=>{
+  const e=environment({secure:false,supported:false});let receive;
+  const control=createMotionControl({win:e.win,doc:e.doc,source:{requestPermission:async()=>'granted',subscribe(fn){receive=fn;return()=>{receive=null}}}});
+  const base=axis(1,0,0,89);await control.start();
+  for(let t=0;t<=600;t+=50){e.emit(0,0,t);receive({beta:89,gamma:0,angle:0,quaternion:base})}
+  assert.equal(control.state.phase,'active');
+  const q=product(base,axis(0,1,0,15));receive({beta:89,gamma:15,angle:0,quaternion:q});const before=control.tick(.016,616);
+  receive({beta:91,gamma:-165,angle:0,quaternion:q.map(v=>-v)});assert.deepEqual(control.tick(.016,632),before);control.destroy();
 });

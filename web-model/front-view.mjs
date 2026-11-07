@@ -71,8 +71,8 @@ const pointer=new THREE.Vector2(),raycaster=new THREE.Raycaster();
 function measure(){const root=document.documentElement;document.body.classList.toggle('landscape-player',root.clientWidth>root.clientHeight);const r=host.getBoundingClientRect();if(!r.width||!r.height)return;const style=getComputedStyle(host),left=parseFloat(style.paddingLeft)||0,right=parseFloat(style.paddingRight)||0,top=parseFloat(style.paddingTop)||0,bottom=parseFloat(style.paddingBottom)||0;const width=Math.max(1,r.width-left-right),height=Math.max(1,r.height-top-bottom),aspect=width/height,units=(compact()?Math.max(11.38,6.34/aspect):Math.max(11.75,6.65/aspect))/height,cx=(left+r.width-right)/2,cy=(top+r.height-bottom)/2;camera.left=-cx*units;camera.right=(r.width-cx)*units;camera.top=cy*units-.28;camera.bottom=-(r.height-cy)*units-.28;camera.updateProjectionMatrix();renderer.setSize(r.width,r.height,false);host.dataset.fit=compact()?'screen':'studio'}
 new ResizeObserver(measure).observe(host);measure();
 function pick(e){const r=host.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);raycaster.setFromCamera(pointer,camera);
-  for(const hit of raycaster.intersectObject(classic.model,true)){const p=classic.model.worldToLocal(hit.point.clone()),zone=hit.object.userData.zone;if(zone==='wheel'&&Math.hypot(p.x,p.y-D.wheelY)>1.945)continue;return {point:p,zone:zone||'case'}}return null}
-function wheelAction(p){const x=p.x,y=p.y-D.wheelY;if(Math.hypot(x,y)<.70)return 'select';return Math.abs(y)>Math.abs(x)?(y>0?'menu':'play'):(x<0?'previous':'next')}
+  for(const hit of raycaster.intersectObject(classic.model,true)){const p=classic.model.worldToLocal(hit.point.clone()),zone=hit.object.userData.zone;if(zone==='wheel'&&Math.hypot(p.x,p.y-D.wheelY)>D.wheelOpening)continue;return {point:p,zone:zone||'case'}}return null}
+function wheelAction(p){const x=p.x,y=p.y-D.wheelY;if(Math.hypot(x,y)<D.centerRadius+.012)return 'select';return Math.abs(y)>Math.abs(x)?(y>0?'menu':'play'):(x<0?'previous':'next')}
 const press=createButtonPress({shortPress:name=>app.action(name),longPress:name=>app.action(name,true),stop:()=>app.stopSeeking()});
 const keyboardCancels=[];
 function release(){press.cancel();}
@@ -84,7 +84,7 @@ host.addEventListener('pointerdown',e=>{if(e.button!==0||gesture)return;const hi
 });
 host.addEventListener('pointermove',e=>{
   if(!gesture){if(e.pointerType!=='touch'&&!motion.state.enabled&&!reducedMotion.matches&&!app.state.reducedMotion){const r=host.getBoundingClientRect();targetY=-.025+((e.clientX-r.left)/r.width-.5)*.07;targetX=-.008+((e.clientY-r.top)/r.height-.5)*.035}return}
-  if(e.pointerId!==gesture.id||gesture.zone!=='wheel'||app.state.hold||Math.hypot(gesture.point.x,gesture.point.y-D.wheelY)<.70)return;
+  if(e.pointerId!==gesture.id||gesture.zone!=='wheel'||app.state.hold||Math.hypot(gesture.point.x,gesture.point.y-D.wheelY)<D.centerRadius+.012)return;
   const hit=pick(e);if(hit?.zone!=='wheel')return;const a=Math.atan2(hit.point.y-D.wheelY,hit.point.x);let delta=a-gesture.angle;while(delta>Math.PI)delta-=Math.PI*2;while(delta<-Math.PI)delta+=Math.PI*2;gesture.angle=a;gesture.sum-=delta;
   if(Math.abs(gesture.sum)>.065){gesture.moved=true;release()}const step=gesture.dial.move(-delta,e.timeStamp);if(step)app.rotate(step);
 });
@@ -98,12 +98,20 @@ window.addEventListener('blur',cancelGesture);window.addEventListener('pagehide'
 host.addEventListener('pointerleave',()=>{if(!gesture){targetX=-.008;targetY=-.025}});
 const overlay=document.createElement('div');overlay.className='model-hit-controls';host.append(overlay);
 const hitButtons=[];
-const buttons=[['menu','MENU，长按返回主页',0,D.wheelY+1.50,.509,44,44],['previous','上一曲，长按快退',-1.50,D.wheelY,.509,44,44],['next','下一曲，长按快进',1.50,D.wheelY,.509,44,44],['play','播放暂停，长按休眠',0,D.wheelY-1.50,.509,44,44],['select','中央选择键',0,D.wheelY,.515,54,54],['hold','锁定或解锁按键',1.95,5.18,0,44,44]];
+const buttons=[['menu','MENU，长按返回主页',0,D.wheelY+1.50,.509,44,44],['previous','上一曲，长按快退',-1.50,D.wheelY,.509,44,44],['next','下一曲，长按快进',1.50,D.wheelY,.509,44,44],['play','播放暂停，长按休眠',0,D.wheelY-1.50,.509,44,44],['select','中央选择键',0,D.wheelY,.515,54,54],['hold','锁定或解锁按键',D.holdX,5.19,D.portZ,44,44]];
 for(const [action,label,x,y,z,w,h]of buttons){const button=document.createElement('button');button.type='button';button.setAttribute('aria-label',label);button.style.width=w+'px';button.style.height=h+'px';
   const activate=()=>{if(action==='hold'){app.state.hold=!app.state.hold;app.render()}else app.action(action)};
   let keyDown=false;const keyPress=createButtonPress({shortPress:activate,longPress:()=>app.action(action,true),stop:()=>app.stopSeeking()});
   keyboardCancels.push(()=>{keyDown=false;keyPress.cancel();});
   button.onclick=e=>{if(e.detail===0)activate()};button.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.stopPropagation();e.preventDefault();if(!keyDown){keyDown=true;keyPress.start(action);}}};button.onkeyup=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();e.stopPropagation();keyDown=false;keyPress.release();}};button.onblur=()=>{keyDown=false;keyPress.cancel();};
+  if(action==='hold'){
+    // The reference switch is flush with the top face and nearly edge-on from
+    // the player camera. Its accessible touch target must not depend on a ray
+    // hitting that subpixel surface.
+    let pointer=null;button.onpointerdown=e=>{if(e.button!==0)return;e.stopPropagation();pointer=e.pointerId;button.setPointerCapture(e.pointerId)};
+    button.onpointerup=e=>{e.stopPropagation();if(pointer===e.pointerId){pointer=null;activate()}};
+    button.onpointercancel=button.onlostpointercapture=()=>{pointer=null};
+  }
   overlay.append(button);hitButtons.push({button,point:new THREE.Vector3(x,y,z)})}
 const swatch=document.getElementById('frontColor');swatch.onclick=()=>{app.state.dark=!app.state.dark;app.render();swatch.setAttribute('aria-label',app.state.dark?'切换银色机身':'切换黑色机身')};
 let meshes=0,triangles=0;classic.model.traverse(o=>{if(o.isMesh){meshes++;triangles+=(o.geometry.index?.count||o.geometry.attributes.position.count)/3}});

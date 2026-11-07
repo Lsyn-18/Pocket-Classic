@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { exportModelGLB } from './export-model.mjs';
 import { createClassic, dimensions as D } from './geometry.mjs';
 import { makeScreen } from './screen.mjs';
 
@@ -43,7 +43,7 @@ function pick(event){
     return {zone:zone||'case',point:p};
   }return null;
 }
-function wheelAction(p){const x=p.x,y=p.y-D.wheelY;if(Math.hypot(x,y)<.70)return 'select';if(Math.abs(y)>Math.abs(x))return y>0?'menu':'play';return x<0?'previous':'next'}
+function wheelAction(p){const x=p.x,y=p.y-D.wheelY;if(Math.hypot(x,y)<D.centerRadius+.012)return 'select';if(Math.abs(y)>Math.abs(x))return y>0?'menu':'play';return x<0?'previous':'next'}
 function clearPress(){clearTimeout(holdTimer);clearInterval(seekTimer);classic.center.position.z=.493}
 renderer.domElement.addEventListener('pointerdown',event=>{
   if(event.button!==0)return;viewTarget=null;const hit=pick(event);
@@ -58,7 +58,7 @@ renderer.domElement.addEventListener('pointermove',event=>{
   if(gesture.zone!=='wheel')return;
   if(app.state.hold)return;
   const hit=pick(event);if(!hit||hit.zone!=='wheel')return;
-  const p=hit.point;if(Math.hypot(gesture.point.x,gesture.point.y-D.wheelY)<.70)return;
+  const p=hit.point;if(Math.hypot(gesture.point.x,gesture.point.y-D.wheelY)<D.centerRadius+.012)return;
   const angle=Math.atan2(p.y-D.wheelY,p.x);let delta=angle-gesture.angle;while(delta>Math.PI)delta-=Math.PI*2;while(delta<-Math.PI)delta+=Math.PI*2;
   gesture.angle=angle;gesture.sum-=delta;
   if(Math.abs(gesture.sum)>.065){gesture.moved=true;clearPress()}
@@ -86,7 +86,7 @@ exportButton.onclick=async()=>{
   try{
     const clone=classic.model.clone(true);clone.scale.setScalar(.01);clone.updateMatrixWorld(true);
     const neutral=screen.neutralTexture();clone.traverse(o=>{if(o.isMesh&&o.userData.lcd){o.material=o.material.clone();o.material.map=neutral}});
-    const binary=await new GLTFExporter().parseAsync(clone,{binary:true,onlyVisible:true,maxTextureSize:1024});
+    const binary=await exportModelGLB(clone);
     const blob=new Blob([binary],{type:'model/gltf-binary'});const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`Pocket-Classic-2009-${app.state.dark?'black':'silver'}.glb`;link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);neutral.dispose();status.textContent='三维模型已导出 · 文件不含账号或歌单信息';
   }catch(error){console.error('Model export failed',error);status.textContent='模型导出失败，请稍后重试'}
   finally{exportButton.disabled=false;exportButton.textContent='下载三维模型'}

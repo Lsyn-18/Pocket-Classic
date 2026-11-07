@@ -70,8 +70,8 @@ class PhysicalDeviceSmokeTest {
         scenario = ActivityScenario.launch(MainActivity::class.java)
         try {
             waitFor("!!window.PocketClassicContext&&document.body.classList.contains('three-ready')",45)
-            js("window.motionSampleCount=0;window.stopMotionSamples=window.PocketClassicContext.native.motion.subscribe(()=>window.motionSampleCount++);document.getElementById('motionToggle').click()")
-            waitFor("window.motionSampleCount>=8&&document.getElementById('modelViewport').dataset.motion==='active'",20)
+            js("window.motionSampleCount=0;window.quaternionSampleCount=0;window.stopMotionSamples=window.PocketClassicContext.native.motion.subscribe(v=>{window.motionSampleCount++;if(Array.isArray(v.quaternion)&&v.quaternion.length===4&&Math.abs(Math.hypot(...v.quaternion)-1)<.01)window.quaternionSampleCount++});document.getElementById('motionToggle').click()")
+            waitFor("window.motionSampleCount>=8&&window.quaternionSampleCount>=8&&document.getElementById('modelViewport').dataset.motion==='active'",20)
             step("Native sensor samples received and natural-hold calibration became active")
         } finally {
             js("if(document.getElementById('motionToggle').getAttribute('aria-pressed')==='true')document.getElementById('motionToggle').click();window.stopMotionSamples?.()")
@@ -112,6 +112,9 @@ class PhysicalDeviceSmokeTest {
             waitFor("window.PocketClassicContext.state.selected===1")
             tap("MENU，长按返回主页"); waitFor("window.PocketClassicContext.state.page==='home'")
             step("Native WebView touch, wheel detent and MENU passed")
+            tap("锁定或解锁按键"); waitFor("window.PocketClassicContext.state.hold===true")
+            tap("锁定或解锁按键"); waitFor("window.PocketClassicContext.state.hold===false")
+            step("Top-left HOLD touch target locks and unlocks")
             if (android.os.Build.VERSION.SDK_INT >= 31) {
                 val motor = context.getSystemService(VibratorManager::class.java).defaultVibrator
                 step("Phone vibration motor available: ${motor.hasVibrator()}, amplitude control: ${motor.hasAmplitudeControl()}")

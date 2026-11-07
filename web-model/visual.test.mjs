@@ -63,10 +63,23 @@ test('decorations stay outside picking and total model triangles stay within twe
   assert.ok(count(next.model)<=count(base.model)*1.2);
   next.model.traverse(o=>{if(o.userData.decorative){const hits=[];o.raycast({},hits);assert.equal(hits.length,0);}});
   next.model.updateMatrixWorld(true);
-  for(const [x,y,zone]of [[0,dimensions.screenY,'screen'],[1,dimensions.wheelY,'wheel'],[1.79,5.213,'hold']]){
+  for(const [x,y,zone]of [[0,dimensions.screenY,'screen'],[1,dimensions.wheelY,'wheel']]){
     const ray=new THREE.Raycaster(new THREE.Vector3(x,y,10),new THREE.Vector3(0,0,-1));assert.equal(ray.intersectObject(next.model,true)[0]?.object.userData.zone,zone);
   }
+  const hold=next.parts.Independent_hold_slider.position;
+  const holdRay=new THREE.Raycaster(new THREE.Vector3(hold.x,10,hold.z),new THREE.Vector3(0,-1,0));assert.equal(holdRay.intersectObject(next.model,true)[0]?.object.userData.zone,'hold');
   assert.equal(next.center.position.z,base.center.position.z);
+});
+
+test('five-view body dimensions, shell seam and top controls match the supplied drawing',()=>{
+  const c=createClassic(new THREE.Texture(),{baseline:false}),d=dimensions;
+  const front=new THREE.Box3().setFromBufferAttribute(c.parts.Continuous_rounded_front_lip.geometry.attributes.position),back=new THREE.Box3().setFromBufferAttribute(c.parts.Polished_stainless_rear_shell.geometry.attributes.position);
+  for(const box of [front,back]){assert.ok(Math.abs(box.max.x-box.min.x-6.18)<1e-5);assert.ok(Math.abs(box.max.y-box.min.y-10.35)<1e-5)}
+  assert.ok(Math.abs(front.max.z-.525)<1e-5);assert.ok(Math.abs(back.min.z+.525)<1e-5);assert.ok(Math.abs(back.max.z-d.seamZ)<1e-5);
+  assert.ok(c.parts.Independent_hold_slider.position.x<0);assert.ok(c.parts.Headphone_socket_rim.position.x>0);
+  assert.equal(c.parts.Live_LCD_320x240.position.y,d.screenY);assert.equal(c.center.position.y,d.wheelY);assert.ok(Math.abs(d.screenWidth/d.screenHeight-4/3)<1e-10);
+  assert.equal(Object.keys(c.parts).filter(name=>name.startsWith('Dock_contact_')).length,30);assert.ok(!c.parts.Fastener_slot_left);
+  c.setHold(true);assert.ok(c.parts.Independent_hold_slider.position.x<0);assert.equal(c.parts.Hold_orange_indicator.visible,true);
 });
 
 test('frosted roughness is not accidentally multiplied into a polished surface',()=>{
