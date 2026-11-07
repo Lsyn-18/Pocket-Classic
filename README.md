@@ -1,6 +1,8 @@
 # Pocket Classic
 
-> 当前版本为 **Android 0.6.0 独立测试版**，新增大字阅读、播放队列、错误恢复和独立环境主题，并移除点按高亮与中央键下压。见 [界面改进说明](docs/UI-REFINEMENT.md)。下载 [Android 0.6.0 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.6.0)，附 SHA-256 校验文件。
+<p align="center"><img src="docs/branding/pocket-classic-icon.svg" width="128" alt="Pocket Classic 白银色软件图标"></p>
+
+> 当前版本为 **Android 0.6.1 独立测试版**，采用以珍珠白与银白色为主的新图标，支持安卓自适应形状和主题单色图标；保留 0.6.0 的界面与操作改进。见 [界面改进说明](docs/UI-REFINEMENT.md)。下载 [Android 0.6.0 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.6.1)，附 SHA-256 校验文件。
 
 **把熟悉的转轮和网易云音乐，放进一个口袋播放器。**
 
@@ -16,7 +18,7 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
 
 <p align="center"><img src="docs/images/frosted-silver.png" width="240" alt="冷银摄影棚：磨砂金属、高清 LCD 与柔和倒影"><img src="docs/images/frosted-black.png" width="240" alt="深色磨砂机身与低饱和摄影棚背景"></p>
 
-1. 下载并安装 [Android 0.6.0 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.6.0)。
+1. 下载并安装 [Android 0.6.1 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.6.1)。
 2. 点击底部「连接网易云」，再点击「保存并打开网易云」。
 3. 在网易云「扫一扫 → 相册」选择刚保存的二维码，确认授权后返回播放器。
 4. 进入「音乐」选择个人歌单、每日推荐或私人漫游。
@@ -46,7 +48,7 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
 
 ## 两个版本的进度
 
-| 功能 | 浏览器开发版 | Android 0.6.0 独立版 |
+| 功能 | 浏览器开发版 | Android 0.6.1 独立版 |
 | --- | --- | --- |
 | iPod 风格菜单、转轮和按键 | 已实现 | 已实现 |
 | 个人歌单、选歌和播放 | 已验证 | 真机账号、歌单曲目及原生播放已验证 |
@@ -102,9 +104,9 @@ npm start
 .\Build-Android.ps1
 ```
 
-脚本构建 Debug APK，并运行安卓单元测试与 Lint。安装包生成到 `outputs/Pocket-Classic-0.6.0-debug.apk`，构建产物不会提交到 Git。若已安装网页开发依赖，脚本会先更新安卓界面资源；否则使用仓库中已打包的资源。安装运行不需要 Node.js。
+脚本构建 Debug APK，并运行安卓单元测试与 Lint。安装包生成到 `outputs/Pocket-Classic-0.6.1-debug.apk`，构建产物不会提交到 Git。若已安装网页开发依赖，脚本会先更新安卓界面资源；否则使用仓库中已打包的资源。安装运行不需要 Node.js。
 
-使用方式见上方「安卓独立使用」。0.3.0 起已移除地址和配对码输入；无需 `adb reverse` 或手机网关。安装包见 [Android 0.6.0 独立测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.6.0)，安装时可能需要允许当前来源安装应用。
+使用方式见上方「安卓独立使用」。0.3.0 起已移除地址和配对码输入；无需 `adb reverse` 或手机网关。安装包见 [Android 0.6.0 独立测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.6.1)，安装时可能需要允许当前来源安装应用。
 
 ## 开发与验证
 
