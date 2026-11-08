@@ -7,9 +7,10 @@ class PlaylistTrackIndex<T>(order: List<Long>?, tracks: List<T>, private val idO
     private val ids = (order ?: tracks.map(idOf)).filter { it > 0 }.distinct().take(100_000)
     private val metadata = tracks.filter { idOf(it) > 0 }.associateBy(idOf).toMutableMap()
 
-    @Synchronized fun page(offset: Int, fetch: (List<Long>) -> List<T>): PlaylistTrackPage<T> {
+    @Synchronized fun page(offset: Int, size: Int = 1000, fetch: (List<Long>) -> List<T>): PlaylistTrackPage<T> {
         require(offset in 0..99_999)
-        val page = ids.drop(offset).take(1000)
+        require(size in 1..1000)
+        val page = ids.drop(offset).take(size)
         val missing = page.filterNot(metadata::containsKey)
         for (batch in missing.chunked(500)) {
             val requested = batch.toHashSet()

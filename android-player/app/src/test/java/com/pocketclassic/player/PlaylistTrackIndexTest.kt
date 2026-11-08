@@ -18,6 +18,11 @@ class PlaylistTrackIndexTest {
         val first=index.page(0) { it.reversed().map(::Track) };val second=index.page(first.nextOffset) { it.reversed().map(::Track) };val last=index.page(second.nextOffset) { it.reversed().map(::Track) }
         assertEquals(ids,(first.tracks+second.tracks+last.tracks).map { it.id });assertEquals(1000,first.nextOffset);assertTrue(first.more);assertEquals(2005,last.nextOffset);assertFalse(last.more)
     }
+    @Test fun likedMusicUsesHundredSongPagesWithoutChangingSavedOrder() {
+        val ids=(205L downTo 1L).toList();val index=index(ids,ids.reversed())
+        val first=index.page(0,100) { emptyList() };val second=index.page(first.nextOffset,100) { emptyList() };val last=index.page(second.nextOffset,100) { emptyList() }
+        assertEquals(ids,(first.tracks+second.tracks+last.tracks).map { it.id });assertEquals(100,first.nextOffset);assertEquals(200,second.nextOffset);assertEquals(205,last.nextOffset);assertFalse(last.more)
+    }
     @Test fun unavailableSongsDoNotChangeOffsetsOrAppendUnexpectedSongs() {
         val index=index(listOf(3,0,-1,2,3,1),emptyList());val page=index.page(0) { listOf(Track(1),Track(999),Track(3)) }
         assertEquals(listOf(3L,1L),page.tracks.map { it.id });assertEquals(3,page.nextOffset);assertEquals(3,page.trackCount);assertFalse(page.more)

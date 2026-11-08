@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/branding/pocket-classic-icon.svg" width="128" alt="Pocket Classic 白银色软件图标"></p>
 
-> 当前版本为 **Android 0.10.4 独立测试版**：保留耳机线的粗细与竖直方向，提高灰白材质对比度，让线材更清楚。「我的歌单」改用网易云移动端创建、收藏列表，保留返回的置顶与自定义排列，补齐列表分页；歌单内歌曲按保存顺序还原，补齐详情并保持播放队列顺序。保留耳机接入动画和仅冷启动显示画报与五秒转轮序章的规则。见 [两处排序修复](docs/PLAYLIST-ORDER.md)、[耳机效果](docs/HEADPHONES.md)。下载 [Android 0.10.4 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.4)，附 SHA-256 校验文件与单文件应用预览；本轮无安卓设备，未使用真实账号完成排序对照。
+> 当前版本为 **Android 0.10.5 独立测试版**：修复「喜欢的音乐」仍使用无序喜欢列表的问题，改为识别当前账号的红心歌单、按其保存顺序显示与入队。保留每页 100 首，重新进入立即刷新，继续加载时保持同一份顺序。保留歌单列表排序、耳机线可见度和冷启动开场规则。见 [排序来源与验证](docs/PLAYLIST-ORDER.md)。下载 [Android 0.10.5 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.5)，附 SHA-256 校验文件与单文件应用预览；当前未连接安卓设备，未用你的账号逐项对照网易云客户端。
 
 **把熟悉的转轮和网易云音乐，放进一个口袋播放器。**
 
@@ -22,7 +22,7 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
 
 <p align="center"><img src="docs/images/frosted-silver.png" width="240" alt="冷银摄影棚：磨砂金属、高清 LCD 与柔和倒影"><img src="docs/images/frosted-black.png" width="240" alt="深色磨砂机身与低饱和摄影棚背景"></p>
 
-1. 下载并安装 [Android 0.10.4 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.4)。
+1. 下载并安装 [Android 0.10.5 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.5)。
 2. 点击底部「连接网易云」，再点击「保存并打开网易云」。
 3. 在网易云「扫一扫 → 相册」选择刚保存的二维码，确认授权后返回播放器。
 4. 进入「音乐」选择喜欢的音乐、我的歌单、每日推荐或私人漫游。离线音乐可直接进入「手机本地音乐」导入，不需要登录。
@@ -110,9 +110,9 @@ npm start
 .\Build-Android.ps1
 ```
 
-脚本构建 Debug APK，并运行安卓单元测试与 Lint。安装包生成到 `outputs/Pocket-Classic-0.10.4-debug.apk`，构建产物不会提交到 Git。若已安装网页开发依赖，脚本会先更新安卓界面资源；否则使用仓库中已打包的资源。安装运行不需要 Node.js。
+脚本构建 Debug APK，并运行安卓单元测试与 Lint。安装包生成到 `outputs/Pocket-Classic-0.10.5-debug.apk`，构建产物不会提交到 Git。若已安装网页开发依赖，脚本会先更新安卓界面资源；否则使用仓库中已打包的资源。安装运行不需要 Node.js。
 
-使用方式见上方「安卓独立使用」。0.3.0 起已移除地址和配对码输入；无需 `adb reverse` 或手机网关。安装包见 [Android 0.10.4 独立测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.4)，安装时可能需要允许当前来源安装应用。
+使用方式见上方「安卓独立使用」。0.3.0 起已移除地址和配对码输入；无需 `adb reverse` 或手机网关。安装包见 [Android 0.10.5 独立测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.5)，安装时可能需要允许当前来源安装应用。
 
 ## 开发与验证
 

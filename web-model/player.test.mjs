@@ -37,6 +37,22 @@ test('liked songs have their own paged list and playback source',async()=>{
   await app.select();await choose(app,'喜欢的音乐');assert.equal(app.state.tracksSource,'liked');app.state.selected=1;await app.select();assert.deepEqual(Array.from(app.state.tracks,t=>t.id),[3,4]);app.state.selected=1;await app.select();assert.equal(app.state.queueMode,'liked');assert.equal(app.state.current.id,4);
 });
 
+test('red-heart order reaches browser and native liked queues across hundred-song pages',async()=>{
+  for(const useNative of [false,true]){
+    const ids=Array.from({length:205},(_,i)=>205-i),routes=[];
+    const library=libraryModule.createLibrary({getSession:()=>({authenticated:true,cookie:'fixture-session',userId:7}),call:async name=>{
+      if(name==='user_playlist_create')return {body:{code:200,data:{playlist:[{id:88,name:'Renamed heart',specialType:5,userId:7}],more:false}}};
+      assert.equal(name,'playlist_detail');return {body:{code:200,playlist:{id:88,trackIds:ids.map(id=>({id})),tracks:ids.toReversed().map(id=>({id,name:'Track '+id,ar:[],dt:120000}))}}};
+    }});
+    const f=fixture({status:()=>({authenticated:true,nickname:'Fixture'}),liked:(_,route)=>{routes.push(route);return library.liked(new URLSearchParams(route.split('?')[1]).get('offset'));}},{},useNative),{app}=f;
+    await app.select();await choose(app,'喜欢的音乐');assert.equal(app.state.tracks[0].id,205);
+    for(let i=0;i<2;i++){app.state.selected=app.state.tracks.length;await app.select();}
+    assert.deepEqual(Array.from(app.state.tracks,t=>t.id),ids);assert.equal(app.state.tracksMore,false);assert.deepEqual(routes,['liked?offset=0','liked?offset=100','liked?offset=200']);
+    app.state.selected=203;await app.select();assert.equal(app.state.current.id,2);assert.equal(app.state.queueMode,'liked');assert.deepEqual(Array.from(app.state.queue,t=>t.id),ids);
+    if(useNative){assert.equal(f.nativeCalls.at(-1).mode,'liked');assert.deepEqual(Array.from(f.nativeCalls.at(-1).tracks,t=>t.id),ids);}
+  }
+});
+
 test('playlist pages reach the browser and native queue in saved order despite shuffled metadata',async()=>{
   for(const useNative of [false,true]){
     const ids=Array.from({length:2003},(_,i)=>2003-i),routes=[];

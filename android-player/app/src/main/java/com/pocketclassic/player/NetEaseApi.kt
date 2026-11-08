@@ -13,10 +13,8 @@ data class LoginPoll(val code: Int, val session: MusicSession? = null)
 class NetEaseApi(private val store: MusicSessionStore) {
     private data class Response(val body: JSONObject,val cookies: Map<String,String>)
     private val device=store.deviceId
-    private var likedSession = ""
-    private var likedAt = 0L
-    private var likedIds = emptyList<Long>()
     private data class PlaylistCache(val session: String,val id: Long,val name: String,val index: PlaylistTrackIndex<JSONObject>)
+    private var likedCache: PlaylistCache? = null
     private var playlistCache: PlaylistCache? = null
     private fun request(path: String, data: JSONObject=JSONObject(), cookie: String="",mobile: Boolean=false): Response {
         require(path.startsWith("/api/") && !path.contains('?') && !path.contains(".."))
@@ -85,17 +83,42 @@ class NetEaseApi(private val store: MusicSessionStore) {
         return JSONObject().put("authenticated",true).put("nickname",profile?.optString("nickname")?:session.nickname).put("message","网易云已登录，手机独立播放")
     }
     private fun ensureSession(session: MusicSession) { if(store.read()?.id!=session.id)throw IOException("账号已变化，请重新打开音乐菜单") }
-    private fun playlistGroup(session: MusicSession,group: String): List<JSONObject> {
+    private fun ownLiked(item: JSONObject,session: MusicSession): Boolean {
+        val owner=item.optLong("userId",item.optJSONObject("creator")?.optLong("userId")?:0L)
+        return item.optLong("id")>0 && isOwnLikedPlaylist(item.optInt("specialType"),owner,session.userId)
+    }
+    private fun playlistGroup(session: MusicSession,group: String,stopAt: ((JSONObject)->Boolean)?=null): List<JSONObject> {
         val rows=mutableListOf<JSONObject>()
         for(offset in 0 until 5000 step 100){
             val data=JSONObject().put("userId",session.userId).put("limit",100).put("offset",offset).put("isWebview","true").put("includeRedHeart","true").put("includeTop","true")
             val body=checked(request("/api/user/playlist/"+group,data,session.cookie,mobile=true))
             ensureSession(session);val payload=body.optJSONObject("data")?:body
             val list=payload.optJSONArray("playlist")?:throw IOException("网易云歌单顺序暂时无法读取，请稍后重试")
-            for(i in 0 until list.length())list.optJSONObject(i)?.let { item -> if(group=="collect")item.put("subscribed",true);rows.add(item) }
+            for(i in 0 until list.length())list.optJSONObject(i)?.let { item ->
+                if(group=="collect")item.put("subscribed",true);rows.add(item)
+                if(stopAt?.invoke(item)==true)return rows
+            }
             if(!hasMore(payload,offset,list.length(),100))return rows
         }
         throw IOException("歌单过多，暂时无法完整读取，请稍后重试")
+    }
+    private fun playlistSnapshot(session: MusicSession,id: Long,requireOrder: Boolean=false): PlaylistCache {
+        val body=checked(request("/api/v6/playlist/detail",JSONObject().put("id",id).put("n",100000).put("s",8),session.cookie))
+        ensureSession(session)
+        val list=body.optJSONObject("playlist")?:throw IOException("歌单暂不可用")
+        val raw=list.optJSONArray("trackIds")
+        if(requireOrder && raw==null)throw IOException("喜欢的音乐顺序暂时无法读取，请稍后重试")
+        val order=raw?.let { (0 until it.length()).map { index -> it.optJSONObject(index)?.optLong("id")?:it.optLong(index) } }
+        val songs=normalize(list.optJSONArray("tracks")?:JSONArray())
+        return PlaylistCache(session.id,id,list.optString("name"),PlaylistTrackIndex(order,List(songs.length()) { songs.getJSONObject(it) }) { it.getLong("id") })
+    }
+    private fun playlistPage(session: MusicSession,cached: PlaylistCache,offset: Int,size: Int=1000): JSONObject {
+        val page=cached.index.page(offset,size) { ids ->
+            val data=JSONObject().put("c",JSONArray(ids.map { JSONObject().put("id",it) }).toString())
+            val songs=normalize(checked(request("/api/v3/song/detail",data,session.cookie)).optJSONArray("songs")?:JSONArray())
+            ensureSession(session);List(songs.length()) { songs.getJSONObject(it) }
+        }
+        return JSONObject().put("id",cached.id).put("name",cached.name).put("trackCount",page.trackCount).put("tracks",JSONArray(page.tracks)).put("nextOffset",page.nextOffset).put("more",page.more)
     }
     private fun normalize(list: JSONArray): JSONArray {
         val result=JSONArray();val seen=hashSetOf<Long>()
@@ -114,21 +137,14 @@ class NetEaseApi(private val store: MusicSessionStore) {
         if(route=="status")return status()
         val session=current();val result=when {
             route.startsWith("liked?offset=") -> {
-                val now = android.os.SystemClock.elapsedRealtime()
-                if (likedSession != session.id || now - likedAt > 60_000) {
-                    val body = checked(request("/api/song/like/get", JSONObject().put("uid", session.userId), session.cookie))
-                    val ids = body.optJSONArray("ids") ?: throw IOException("喜欢的音乐列表暂时无法读取")
-                    likedIds = (0 until ids.length()).map { ids.optLong(it) }.filter { it > 0 }.distinct().take(100000)
-                    ensureSession(session); likedSession = session.id; likedAt = now
+                val offset=route.substringAfter("offset=").toInt()
+                var cached=likedCache
+                if(offset==0 || cached?.session!=session.id){
+                    val rows=playlistGroup(session,"create") { ownLiked(it,session) }
+                    val heart=rows.firstOrNull { ownLiked(it,session) }?:throw IOException("喜欢的音乐歌单暂时无法读取，请稍后重试")
+                    cached=playlistSnapshot(session,heart.getLong("id"),requireOrder=true);likedCache=cached
                 }
-                val offset = route.substringAfter("offset=").toInt(); val ids = likedIds.drop(offset).take(100)
-                val tracks = if (ids.isEmpty()) JSONArray() else {
-                    val data = JSONObject().put("c", JSONArray(ids.map { JSONObject().put("id", it) }).toString())
-                    val songs = normalize(checked(request("/api/v3/song/detail", data, session.cookie)).optJSONArray("songs") ?: JSONArray())
-                    val byId = (0 until songs.length()).map { songs.getJSONObject(it) }.associateBy { it.getLong("id") }
-                    JSONArray(ids.mapNotNull { byId[it] })
-                }
-                JSONObject().put("tracks", tracks).put("trackCount", likedIds.size).put("nextOffset", offset + ids.size).put("more", offset + ids.size < likedIds.size)
+                playlistPage(session,cached,offset,100).put("orderSource","red-heart-playlist")
             }
             route.startsWith("artists?offset=") -> {
                 val offset=route.substringAfter("offset=").toInt()
@@ -151,10 +167,7 @@ class NetEaseApi(private val store: MusicSessionStore) {
                 val created=playlistGroup(session,"create")
                 val collected=playlistGroup(session,"collect")
                 val output=JSONArray()
-                val rows=playlistGroupsInOrder(created,collected,{it.optLong("id")}) {
-                    val owner=it.optLong("userId",it.optJSONObject("creator")?.optLong("userId")?:0L)
-                    isOwnLikedPlaylist(it.optInt("specialType"),owner,session.userId)
-                }
+                val rows=playlistGroupsInOrder(created,collected,{it.optLong("id")}) { ownLiked(it,session) }
                 for(item in rows)output.put(JSONObject().put("id",item.optLong("id")).put("name",item.optString("name")).put("trackCount",item.optInt("trackCount")).put("subscribed",item.optBoolean("subscribed")))
                 JSONObject().put("playlists",output).put("orderSource","mobile")
             }
@@ -162,21 +175,8 @@ class NetEaseApi(private val store: MusicSessionStore) {
                 val id=route.substringAfter("id=").substringBefore('&').toLong()
                 val offset=if(route.contains("&offset="))route.substringAfter("&offset=").toInt() else 0
                 var cached=playlistCache
-                if(offset==0 || cached?.session!=session.id || cached.id!=id){
-                    val body=checked(request("/api/v6/playlist/detail",JSONObject().put("id",id).put("n",100000).put("s",8),session.cookie))
-                    val list=body.optJSONObject("playlist")?:throw IOException("歌单暂不可用")
-                    val songs=normalize(list.optJSONArray("tracks")?:JSONArray())
-                    val order=list.optJSONArray("trackIds")?.let { raw -> (0 until raw.length()).map { raw.optJSONObject(it)?.optLong("id") ?: raw.optLong(it) } }
-                    ensureSession(session)
-                    cached=PlaylistCache(session.id,id,list.optString("name"),PlaylistTrackIndex(order,List(songs.length()) { songs.getJSONObject(it) }) { it.getLong("id") })
-                    playlistCache=cached
-                }
-                val page=cached.index.page(offset) { ids ->
-                    val data=JSONObject().put("c",JSONArray(ids.map { JSONObject().put("id",it) }).toString())
-                    val songs=normalize(checked(request("/api/v3/song/detail",data,session.cookie)).optJSONArray("songs")?:JSONArray())
-                    ensureSession(session);List(songs.length()) { songs.getJSONObject(it) }
-                }
-                JSONObject().put("id",id).put("name",cached.name).put("trackCount",page.trackCount).put("tracks",JSONArray(page.tracks)).put("nextOffset",page.nextOffset).put("more",page.more)
+                if(offset==0 || cached?.session!=session.id || cached.id!=id){cached=playlistSnapshot(session,id);playlistCache=cached}
+                playlistPage(session,cached,offset)
             }
             else -> {
                 val daily=route=="daily";val path=if(daily)"/api/v3/discovery/recommend/songs" else "/api/v1/radio/get"

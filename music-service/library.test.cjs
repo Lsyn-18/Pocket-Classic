@@ -2,17 +2,71 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {createLibrary,validQuality,ordinaryPlaylists}=require('./library.cjs');
 const session={cookie:'test-session',authenticated:true};
+const song=id=>({id,name:'Song '+id,ar:[],dt:5000});
 
 test('own liked playlist is independent of its name and other users liked playlists remain normal',()=>{
   const rows=[{id:1,name:'renamed',specialType:5,userId:7},{id:2,name:'喜欢的音乐',specialType:0,userId:7},{id:3,name:'other likes',specialType:5,creator:{userId:8}}];
   assert.deepEqual(ordinaryPlaylists(rows,7).map(p=>p.id),[2,3]);
 });
 
-test('liked songs paginate in liked order, skip unavailable metadata and fence old sessions',async()=>{
+test('liked songs follow the saved red-heart playlist instead of the unordered like set',async()=>{
   const calls=[],s={...session,userId:7};const ids=Array.from({length:102},(_,i)=>102-i);
-  const library=createLibrary({getSession:()=>s,call:async(name,p)=>{calls.push(name);if(name==='likelist')return {body:{code:200,ids}};return {body:{code:200,songs:p.ids.split(',').map(Number).filter(id=>id!==50).reverse().map(id=>({id,name:'Song '+id,ar:[],dt:5000}))}};}});
-  const a=await library.liked(0),b=await library.liked(a.nextOffset);assert.equal(a.tracks[0].id,102);assert.equal(a.nextOffset,100);assert.equal(a.more,true);assert.deepEqual(b.tracks.map(t=>t.id),[2,1]);assert.equal(b.more,false);assert.equal(calls.filter(c=>c==='likelist').length,1);
+  const library=createLibrary({getSession:()=>s,call:async(name,p)=>{
+    calls.push(name);if(name==='likelist')return {body:{code:200,ids:ids.toReversed()}};
+    if(name==='user_playlist_create')return {body:{code:200,data:{playlist:[{id:80,name:'Other likes',specialType:5,userId:8},{id:81,name:'喜欢的音乐',specialType:0,userId:7},{id:88,name:'Renamed heart',specialType:5,userId:7}],more:false}}};
+    if(name==='playlist_detail'){assert.equal(p.id,88);return {body:{code:200,playlist:{id:88,name:'Renamed heart',trackIds:ids.map(id=>({id})),tracks:[]}}};}
+    assert.equal(name,'song_detail');return {body:{code:200,songs:p.ids.split(',').map(Number).filter(id=>id!==50).reverse().map(id=>({id,name:'Song '+id,ar:[],dt:5000}))}};
+  }});
+  const a=await library.liked(0),b=await library.liked(a.nextOffset);assert.equal(a.tracks[0].id,102);assert.equal(a.nextOffset,100);assert.equal(a.more,true);assert.deepEqual(b.tracks.map(t=>t.id),[2,1]);assert.equal(b.more,false);assert.equal(calls.includes('likelist'),false);assert.equal(calls.filter(c=>c==='playlist_detail').length,1);
   let current=s,finish;const late=createLibrary({getSession:()=>current,call:()=>new Promise(resolve=>finish=resolve)});const pending=late.liked();current={...s,cookie:'new'};finish({body:{code:200,ids:[1]}});await assert.rejects(pending,/账号已变化/);
+});
+
+test('liked pagination holds its saved snapshot and reopening refreshes the red-heart order immediately',async()=>{
+  let saved=Array.from({length:205},(_,i)=>205-i);const s={...session,userId:7},calls=[];
+  const library=createLibrary({getSession:()=>s,call:async name=>{
+    calls.push(name);
+    if(name==='user_playlist_create')return {body:{code:200,data:{playlist:[{id:88,specialType:5,userId:7}],more:false}}};
+    assert.equal(name,'playlist_detail');return {body:{code:200,playlist:{id:88,trackIds:saved.map(id=>({id})),tracks:saved.toReversed().map(song)}}};
+  }});
+  const first=await library.liked(0);saved=[6,2,9,1];const second=await library.liked(first.nextOffset),last=await library.liked(second.nextOffset);
+  assert.deepEqual([...first.tracks,...second.tracks,...last.tracks].map(t=>t.id),Array.from({length:205},(_,i)=>205-i));assert.equal(first.nextOffset,100);assert.equal(last.more,false);assert.equal(calls.length,2);
+  const refreshed=await library.liked(0);assert.deepEqual(refreshed.tracks.map(t=>t.id),saved);assert.equal(refreshed.trackCount,4);assert.equal(calls.length,4);
+});
+
+test('missing own red-heart identity or saved IDs produces an error instead of unordered fallback',async()=>{
+  for(const own of [false,true]){
+    const library=createLibrary({getSession:()=>({...session,userId:7}),call:async name=>{
+      if(name==='user_playlist_create')return {body:{code:200,data:{playlist:[{id:88,specialType:5,userId:own?7:8}],more:false}}};
+      assert.equal(name,'playlist_detail');return {body:{code:200,playlist:{id:88,tracks:[song(9)]}}};
+    }});
+    await assert.rejects(library.liked(0),own?/顺序/:/歌单/);
+  }
+});
+
+test('an empty saved red-heart playlist ignores stale detail rows',async()=>{
+  const library=createLibrary({getSession:()=>({...session,userId:7}),call:async name=>name==='user_playlist_create'?{body:{code:200,data:{playlist:[{id:88,specialType:5,userId:7}],more:false}}}:{body:{code:200,playlist:{id:88,trackIds:[],tracks:[song(9)]}}}});
+  const page=await library.liked(0);assert.deepEqual(page.tracks,[]);assert.equal(page.trackCount,0);assert.equal(page.more,false);
+});
+
+test('account changes fence both red-heart details and missing-song responses',async()=>{
+  for(const stage of ['playlist_detail','song_detail']){
+    let current={...session,userId:7},finish,started;const ready=new Promise(resolve=>started=resolve);
+    const library=createLibrary({getSession:()=>current,call:async name=>{
+      if(name==='user_playlist_create')return {body:{code:200,data:{playlist:[{id:88,specialType:5,userId:7}],more:false}}};
+      if(name===stage){started();return new Promise(resolve=>finish=resolve);}
+      return {body:{code:200,playlist:{id:88,trackIds:[{id:3}],tracks:[]}}};
+    }});
+    const pending=library.liked(0);await ready;current={...current,cookie:'new-session'};finish({body:{code:200,playlist:{id:88,trackIds:[{id:3}],tracks:[song(3)]},songs:[song(3)]}});await assert.rejects(pending,/账号已变化/);
+  }
+});
+
+test('failed red-heart metadata loads remain retryable in saved order',async()=>{
+  let offline=true;const library=createLibrary({getSession:()=>({...session,userId:7}),call:async name=>{
+    if(name==='user_playlist_create')return {body:{code:200,data:{playlist:[{id:88,specialType:5,userId:7}],more:false}}};
+    if(name==='playlist_detail')return {body:{code:200,playlist:{id:88,trackIds:[{id:3},{id:2},{id:1}],tracks:[]}}};
+    assert.equal(name,'song_detail');if(offline)throw Error('offline');return {body:{code:200,songs:[1,2,3].map(song)}};
+  }});
+  await assert.rejects(library.liked(0),/offline/);offline=false;assert.deepEqual((await library.liked(0)).tracks.map(t=>t.id),[3,2,1]);
 });
 test('followed artists use paged subscriptions and return only display data',async()=>{
   const calls=[];const library=createLibrary({getSession:()=>session,call:async(name,params,cookie)=>{calls.push({name,params,cookie});return {body:{code:200,hasMore:true,data:[{id:7,name:'Singer',musicSize:80,private:'hidden'},{id:7,name:'duplicate'},{id:0}]}}}});
