@@ -148,6 +148,18 @@ class StartupAnimationDeviceTest {
             ready("window.PocketClassicContext.state.page==='home'")
             step("Real WebView touch: centre and MENU usable immediately after opening")
 
+            val volumeBeforeReentry = js("window.PocketClassicContext.audio.volume")
+            js("window.retainedOpeningProbe='old-page'")
+            shell("input keyevent KEYCODE_HOME"); Thread.sleep(400); launch()
+            ready("document.body.classList.contains('startup-playing')")
+            assertEquals("undefined",js("typeof window.retainedOpeningProbe").trim('"'))
+            js("window.PocketClassicContext.native.ready.then(value=>window.reentrySnapshot=value);true")
+            ready("!!window.reentrySnapshot")
+            assertEquals("true",js("window.reentrySnapshot.opening"))
+            ready("document.getElementById('modelViewport').dataset.opening==='complete'")
+            assertEquals(volumeBeforeReentry,js("window.PocketClassicContext.audio.volume"))
+            usable(); step("Explicit desktop launcher entry replays poster and wheel without changing media volume")
+
             relaunch(); js("window.PocketClassicContext.action('menu',true)")
             ready("document.getElementById('modelViewport').dataset.opening==='wheel'"); capture("startup-wheel.png")
             ready("document.getElementById('modelViewport').dataset.opening==='hold'"); capture("startup-lit.png")
@@ -161,11 +173,12 @@ class StartupAnimationDeviceTest {
             step("Physical skip touch consumes the action and restores the player")
 
             relaunch(); ready("document.body.classList.contains('startup-playing')")
-            shell("input keyevent KEYCODE_HOME"); Thread.sleep(400); launch()
+            shell("input keyevent KEYCODE_HOME"); Thread.sleep(400)
+            shell("am start -f 0x10000000 -n com.pocketclassic.player/.MainActivity")
             ready("document.getElementById('modelViewport').dataset.opening==='background'")
             usable(); val before = js("Number(document.getElementById('modelViewport').dataset.frames)").toInt()
             Thread.sleep(500); assertTrue(js("Number(document.getElementById('modelViewport').dataset.frames)").toInt() > before)
-            step("HOME and launcher return end the opening without replay; rendering resumes")
+            step("Ordinary task return ends the opening without replay; rendering resumes")
 
             relaunch(); ready("document.body.classList.contains('startup-playing')")
             onActivity { it.onBackPressedDispatcher.onBackPressed() }

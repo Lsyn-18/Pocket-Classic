@@ -2,6 +2,7 @@ package com.pocketclassic.player
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.content.Intent
 import android.media.AudioManager
 import android.view.KeyEvent
 import android.view.View
@@ -30,6 +31,7 @@ class NativePlayerHost(
     private var destroyed = false
     private var foreground = false
     private var revision = -1L
+    @Volatile private var documentGeneration = 0L
     private val motion = NativeMotion(activity) { value -> emit(JSONObject().put("type", "orientation").put("value", value)) }
     private val battery = NativeBattery(activity) { value -> if (ready && foreground) emit(JSONObject().put("type", "battery").put("value", value)) }
     private val haptics = NativeHaptics(activity)
@@ -93,8 +95,9 @@ class NativePlayerHost(
     }
     private fun handle(raw: String) {
         if (raw.length > 2_000_000) return
+        val generation = documentGeneration
         activity.lifecycleScope.launch {
-            if (destroyed || webView.url != NativeContract.ORIGIN + NativeContract.PLAYER_PATH) return@launch
+            if (destroyed || generation != documentGeneration || webView.url != NativeContract.ORIGIN + NativeContract.PLAYER_PATH) return@launch
             var id = 0
             try {
                 val message = JSONObject(raw); id = message.getInt("id"); require(id > 0)
@@ -120,9 +123,9 @@ class NativePlayerHost(
                     "finish" -> { activity.finish(); JSONObject() }
                     else -> throw IllegalArgumentException("不支持此操作")
                 }
-                emit(JSONObject().put("type", "response").put("id", id).put("ok", true).put("result", result))
+                if (generation == documentGeneration) emit(JSONObject().put("type", "response").put("id", id).put("ok", true).put("result", result))
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { emit(JSONObject().put("type", "response").put("id", id).put("ok", false).put("error", e.message?.take(160) ?: "手机操作暂时无法完成")) }
+            catch (e: Exception) { if (generation == documentGeneration) emit(JSONObject().put("type", "response").put("id", id).put("ok", false).put("error", e.message?.take(160) ?: "手机操作暂时无法完成")) }
         }
     }
     private fun emit(packet: JSONObject) {
@@ -137,6 +140,15 @@ class NativePlayerHost(
     }
     fun connectionChanged() { if (ready) emit(JSONObject().put("type", "connection")) }
     fun back() { if (ready) webView.evaluateJavascript("window.PocketClassicNative&&window.PocketClassicNative.back();", null) else activity.finish() }
+    fun onNewIntent(intent: Intent) {
+        if (destroyed || !vm.openingIntent(intent.action,intent.categories)) return
+        // A launcher tap can reuse this Activity and its already-finished page.
+        // Remount only the UI; Media3, its queue and system volume stay native.
+        if (webView.url == NativeContract.ORIGIN + NativeContract.PLAYER_PATH) {
+            documentGeneration++; ready = false; revision = -1L
+            webView.reload()
+        }
+    }
     fun resume() {
         if (destroyed) return
         foreground = true; webView.resumeTimers(); webView.onResume()

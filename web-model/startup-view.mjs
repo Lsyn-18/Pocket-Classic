@@ -34,7 +34,7 @@ export function createStartupView({app,host,canvas,lcd,dimensions,baseline,poste
   function wheel(event){event.preventDefault();event.stopImmediatePropagation();}
   function visibility(){if(document.hidden)finish('background');}
   function hide(){finish('background');}
-  function preference(){if(reduced.matches)finish('reduced-motion');}
+  function preference(){if(reduced.matches&&!poster?.active)finish('reduced-motion');}
   skip.onclick=()=>finish('skip');
   document.addEventListener('keydown',key,true);document.addEventListener('pointerdown',pointer,true);
   document.addEventListener('wheel',wheel,{capture:true,passive:false});
@@ -56,7 +56,7 @@ export function createStartupView({app,host,canvas,lcd,dimensions,baseline,poste
     warm(){playback.warm();},
     update(now,view){
       if(!playback.active)return null;
-      if(app.state.reducedMotion){finish('reduced-motion');return null;}
+      if(app.state.reducedMotion&&!poster?.active){finish('reduced-motion');return null;}
       const seconds=playback.tick(now);
       if(!playback.active){clean();return null;}
       const sample=sampleOpening(seconds,view,dimensions);

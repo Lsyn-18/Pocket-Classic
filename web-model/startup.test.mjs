@@ -5,7 +5,7 @@ import {dimensions as D} from './geometry.mjs';
 import {sampleOpening,createOpeningPlayback,openingTiming} from './startup.mjs';
 import {createStartupView} from './startup-view.mjs';
 import {createStartupRenderer} from './startup-renderer.mjs';
-import {posterTiming,createLoadingPoster} from './loading-poster.mjs';
+import {posterTiming,createLoadingPoster,posterVersion} from './loading-poster.mjs';
 
 function view(width,height,padding={}){
   const {left=4,right=4,top=8,bottom=76}=padding,w=width-left-right,h=height-top-bottom;
@@ -95,17 +95,32 @@ class Element extends EventTarget {
   constructor(){super();this.style={removeProperty(key){delete this[key.replace(/-([a-z])/g,(_,c)=>c.toUpperCase())];}};this.children=[];this.dataset={};this.inert=false;this.classes=new Set();this.classList={add:value=>this.classes.add(value),remove:value=>this.classes.delete(value)};}
   setAttribute(){} append(...items){for(const item of items){item.parent=this;this.children.push(item);}} contains(item){return item===this||this.children.includes(item);} remove(){if(this.parent)this.parent.children=this.parent.children.filter(item=>item!==this);} focus(){document.activeElement=this;}
 }
+test('reduced motion retains the static poster until its readiness fade has finished',async()=>{
+  const original={document:globalThis.document,window:globalThis.window,matchMedia:globalThis.matchMedia};let startup,completePoster;
+  try{
+    const body=new Element(),host=new Element(),canvas=new Element(),lcd=new Element(),doc=new EventTarget(),win=new EventTarget(),query=new EventTarget();query.matches=false;
+    Object.assign(doc,{body,hidden:false,activeElement:body,createElement:()=>new Element(),querySelectorAll:()=>[]});
+    globalThis.document=doc;globalThis.window=win;globalThis.matchMedia=()=>query;
+    const poster={active:true,finished:new Promise(resolve=>{completePoster=resolve;})};let finished=0;
+    startup=createStartupView({app:{state:{reducedMotion:true}},host,canvas,lcd,dimensions:D,poster,onFinish(){finished++;}});
+    startup.warm();startup.update(100,view(420,820));
+    assert.equal(startup.active,true,'the first model frame must not remove the static loading poster');assert.equal(finished,0);
+    query.matches=true;query.dispatchEvent(new Event('change'));assert.equal(startup.active,true,'the system preference must also let the poster complete');
+    poster.active=false;completePoster();await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(startup.active,false);assert.equal(host.dataset.opening,'reduced-motion');assert.equal(finished,1);
+  }finally{startup?.finish('test');completePoster?.();Object.assign(globalThis,original);}
+});
 test('Android poster uses native version persistence when browser storage is unavailable',async()=>{
   const original={document:globalThis.document,matchMedia:globalThis.matchMedia,setTimeout:globalThis.setTimeout,clearTimeout:globalThis.clearTimeout};
   try{
-    for(const version of ['0.9.0','0.8.2']){
+    for(const version of [posterVersion,'0.8.2']){
       const element=new Element(),query=new EventTarget(),timers=new Map(),marked=[];let id=0,storageReads=0;
       query.matches=false;globalThis.document={getElementById:()=>element};globalThis.matchMedia=()=>query;
       globalThis.setTimeout=(fn,ms)=>(timers.set(++id,{fn,ms}),id);globalThis.clearTimeout=id=>timers.delete(id);
       const poster=createLoadingPoster({preferences:Promise.resolve({posterVersion:version}),markReady:async version=>marked.push(version),storage:{getItem(){storageReads++;throw Error('Storage disabled');}}});
       await Promise.resolve();assert.equal(timers.size,0);poster.warm();
-      assert.equal(storageReads,0);assert.deepEqual(marked,['0.9.0']);
-      const first=[...timers.values()][0];assert.ok(version==='0.9.0'?first.ms<500:first.ms>900);
+      assert.equal(storageReads,0);assert.deepEqual(marked,[posterVersion]);
+      const first=[...timers.values()][0];assert.ok(version===posterVersion?first.ms<500:first.ms>900);
       first.fn();assert.equal(element.classes.has('is-leaving'),true);[...timers.values()].at(-1).fn();await poster.finished;assert.equal(poster.active,false);
     }
   }finally{Object.assign(globalThis,original);}
