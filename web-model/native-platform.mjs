@@ -1,6 +1,7 @@
 export function createNativePlatform(transport, host = window) {
-  let sequence=0,playbackListener,connectionListener,batteryListener,lastBattery,lastSnapshot,transitioning=false,preferencesReady=false,lastPreferences='';
-  const pending=new Map(),motionListeners=new Set(),visibilityListeners=new Set();
+  let sequence=0,playbackListener,connectionListener,batteryListener,lastBattery,lastHeadphones,lastSnapshot,transitioning=false,preferencesReady=false,lastPreferences='';
+  const pending=new Map(),motionListeners=new Set(),visibilityListeners=new Set(),headphoneListeners=new Set();
+  function headphones(value){lastHeadphones={available:value?.available!==false,connected:!!value?.connected,kind:['wired','usb','bluetooth'].includes(value?.kind)?value.kind:'none'};for(const listener of headphoneListeners)listener(lastHeadphones);}
   function request(method,args={}) {
     const id=++sequence;
     return new Promise((resolve,reject)=>{
@@ -83,6 +84,7 @@ export function createNativePlatform(transport, host = window) {
     vibrate:()=>fire('haptic'),
     artwork:async url=>(await request('artwork',{url})).dataUrl,
     onBattery(listener){batteryListener=listener;if(lastBattery)listener(lastBattery);},
+    onHeadphones(listener){headphoneListeners.add(listener);if(lastHeadphones)listener(lastHeadphones);return()=>headphoneListeners.delete(listener);},
     syncPreferences(value){if(!preferencesReady)return;const text=JSON.stringify(value);if(text!==lastPreferences){lastPreferences=text;fire('preferences',value);}},
     onPlayback(listener){playbackListener=listener;if(lastSnapshot)listener(lastSnapshot);},
     onConnection(listener){connectionListener=listener;},
@@ -98,11 +100,12 @@ export function createNativePlatform(transport, host = window) {
       }else if(packet.type==='playback')snapshot(packet.value);
       else if(packet.type==='connection')connectionListener?.();
       else if(packet.type==='battery'){lastBattery=packet.value;batteryListener?.(lastBattery);}
+      else if(packet.type==='headphones')headphones(packet.value);
       else if(packet.type==='orientation')for(const listener of motionListeners)listener(packet.value);
       else if(packet.type==='lifecycle')for(const listener of visibilityListeners)listener(!!packet.visible);
     },
   };
   host.PocketClassicNative=platform;
-  platform.ready=request('ready').then(value=>{if(value.battery){lastBattery=value.battery;batteryListener?.(lastBattery);}snapshot(value);preferencesReady=true;return value;});
+  platform.ready=request('ready').then(value=>{if(value.battery){lastBattery=value.battery;batteryListener?.(lastBattery);}if(value.headphones)headphones(value.headphones);snapshot(value);preferencesReady=true;return value;});
   return platform;
 }

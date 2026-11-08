@@ -12,6 +12,8 @@ import {createAtmosphere} from './atmosphere.mjs';
 import {createStartupView} from './startup-view.mjs';
 import {createStartupRenderer} from './startup-renderer.mjs';
 import {createLoadingPoster} from './loading-poster.mjs';
+import {createHeadphones} from './headphones.mjs';
+import {headphoneFrustum} from './headphone-motion.mjs';
 
 const app=window.PocketClassicContext,host=document.getElementById('modelViewport'),status=document.getElementById('modelStatus');
 document.body.classList.toggle('visual-baseline',visualBaseline);
@@ -43,6 +45,11 @@ const screen=makeScreen(app,{...quality,baseline:visualBaseline}),classic=create
 if(!visualBaseline){screen.canvas.className='lcd-surface';screen.canvas.setAttribute('aria-hidden','true');host.append(screen.canvas);}
 const floor=createStudioFloor(classic.model,-D.height/2-.025,{baseline:visualBaseline});scene.add(floor.group);
 const atmosphere=createAtmosphere({scene,camera,native:!!app.native,baseline:visualBaseline});
+const headphones=createHeadphones(classic.model,D);
+const unsubscribeHeadphones=app.native?.onHeadphones?.(value=>{headphones.setConnected(value.connected);host.dataset.headphones=value.connected?'connected':'none';host.dataset.headphoneKind=value.kind;});
+app.native?.ready.then(snapshot=>{if(snapshot?.opening===false&&snapshot.headphones?.connected)headphones.snap();}).catch(()=>{});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)headphones.snap();});
+const unsubscribeHeadphoneVisibility=app.native?.motion.onVisibility(visible=>{if(!visible)headphones.snap();});
 classic.model.rotation.set(-.008,-.025,0);
 let targetX=-.008,targetY=-.025,previous=performance.now(),gesture=null,renderedFrames=0;
 const compactQuery=matchMedia('(max-width:1000px)');
@@ -69,6 +76,7 @@ const motion=createMotionControl({source:app.native?.motion,onChange:motionUI});
 document.getElementById('playerOptionsPanel').prepend(motionButton.parentElement);
 document.getElementById('openAppearance').onclick=()=>{closeOptions();app.openAppearance();};
 document.getElementById('openHelp').onclick=()=>{closeOptions();app.openHelp();};
+document.getElementById('headphonesPreview').onclick=()=>{closeOptions();headphones.preview();document.getElementById('uiAnnouncement').textContent='预览耳机接入动画，实际音频输出保持不变';};
 motionButton.onclick=()=>{if(motion.state.enabled||motion.state.pending)motion.stop();else motion.start()};
 calibrateButton.onclick=()=>motion.recalibrate();
 for(const button of tools.querySelectorAll('button'))button.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' ')e.stopPropagation()});
@@ -134,7 +142,8 @@ const startupRenderer=createStartupRenderer(renderer,{model:classic.model,floor:
 const startup=createStartupView({app,host,canvas:renderer.domElement,lcd:screen.canvas,dimensions:D,baseline:visualBaseline,poster,onFinish(){
   poster.finish();
   startupRenderer.dispose();
-  if(fittedView)applyFrustum(fittedView.frustum);
+  const headphonePose=headphones.update(0,{reducedMotion:reducedMotion.matches||app.state.reducedMotion});
+  if(fittedView)applyFrustum(headphoneFrustum(fittedView,headphonePose.framing));
   classic.lcd.material.color.setScalar(1);reflectedLCD?.material.color.setScalar(1);
   classic.model.rotation.set(-.008,-.025,0);cancelGesture();
   // A skip can arrive between frames. Redraw both surfaces before unmasking
@@ -143,13 +152,16 @@ const startup=createStartupView({app,host,canvas:renderer.domElement,lcd:screen.
   atmosphere.update(0,{dark:document.body.classList.contains('dark'),reducedMotion:true});
   floor.update(document.body.classList.contains('dark'),atmosphere.accent,1,app.state.dark);reflectedLCD?.material.color.setScalar(1);renderer.render(scene,camera);
 }});
-window.PocketClassicVisual={diagnostics(){const gl=renderer.getContext();return {profile:host.dataset.visualProfile,opening:host.dataset.opening,drawCalls:renderer.info.render.calls,frameTriangles:renderer.info.render.triangles,textures:renderer.info.memory.textures,geometries:renderer.info.memory.geometries,shaderErrors,glError:gl.getError(),contextLost:gl.isContextLost(),lcdPixels:host.dataset.lcdPixels,particles:atmosphere.count};}};
+window.PocketClassicVisual={diagnostics(){const gl=renderer.getContext();return {profile:host.dataset.visualProfile,opening:host.dataset.opening,headphones:host.dataset.headphones||'none',headphonePhase:host.dataset.headphonePhase||'waiting',drawCalls:renderer.info.render.calls,frameTriangles:renderer.info.render.triangles,textures:renderer.info.memory.textures,geometries:renderer.info.memory.geometries,shaderErrors,glError:gl.getError(),contextLost:gl.isContextLost(),lcdPixels:host.dataset.lcdPixels,particles:atmosphere.count};}};
 function frame(now){const dt=Math.min(.05,(now-previous)/1000);previous=now;const ease=1-Math.exp(-dt*7),reduce=reducedMotion.matches||app.state.reducedMotion;
   if(reduce){targetX=-.008;targetY=-.025;if(motion.state.enabled)motion.stop();}
   const sensor=motion.tick(dt,now,!!gesture),usingSensor=motion.state.enabled;
   const x=usingSensor?-.008+sensor.x:targetX,y=usingSensor?-.025+sensor.y:targetY;
   // Freeze both input and the rendered pose while using the wheel or buttons.
   const opening=fittedView?startup.update(now,fittedView):null;
+  const headphonePose=headphones.update(dt,{blocked:!!opening||poster.active,paused:!!gesture,reducedMotion:reduce,tiltX:classic.model.rotation.x,tiltY:classic.model.rotation.y});
+  host.dataset.headphonePhase=opening?'waiting':headphonePose.visible?(headphonePose.progress===1?'seated':'moving'):'none';
+  if(!opening&&fittedView)applyFrustum(headphoneFrustum(fittedView,headphonePose.framing));
   if(opening){applyFrustum(opening.bounds);classic.model.rotation.set(-.008*opening.pose,-.025*opening.pose,0);}
   else if(!gesture){const follow=usingSensor?1:ease;classic.model.rotation.x+=(x-classic.model.rotation.x)*follow;classic.model.rotation.y+=(y-classic.model.rotation.y)*follow}
   classic.model.updateMatrixWorld(true);classic.setDark(app.state.dark);classic.setHold(app.state.hold);screen.draw();
@@ -172,4 +184,4 @@ function frame(now){const dt=Math.min(.05,(now-previous)/1000);previous=now;cons
 // Compile even the initially hidden scene before the first visible wheel.
 // Android can otherwise defer linking until the canvas opacity becomes nonzero.
 startupRenderer.warm(scene,camera).catch(error=>console.warn('Scene warmup',error)).finally(()=>{document.body.classList.add('three-ready');requestAnimationFrame(frame);});
-window.addEventListener('pagehide',e=>{if(!e.persisted){atmosphere.dispose();floor.dispose();screen.dispose();environment.dispose();renderer.dispose();}});
+window.addEventListener('pagehide',e=>{if(!e.persisted){unsubscribeHeadphones?.();unsubscribeHeadphoneVisibility?.();headphones.dispose();atmosphere.dispose();floor.dispose();screen.dispose();environment.dispose();renderer.dispose();}});

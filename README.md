@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/branding/pocket-classic-icon.svg" width="128" alt="Pocket Classic 白银色软件图标"></p>
 
-> 当前版本为 **Android 0.9.2 独立测试版**：画报与五秒转轮序章仅在应用进程被清理后的冷启动显示，普通返回和重复点图标不重播；播放页封面放大，切换进度 / 音量使用浅色内嵌提示。保留摄影棚背景、系统媒体音量与已确认的体感响应。见 [当前规则与验证](docs/STARTUP-PROCESS.md)、[背景优化](docs/AMBIENCE.md)。下载 [Android 0.9.2 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.9.2)，附 SHA-256 校验文件与单文件应用预览；本轮无安卓设备，尚未真机复验。
+> 当前版本为 **Android 0.10.0 独立测试版**：增加有线、USB 与蓝牙音频设备连接检测，以及苹果风格 3.5mm 耳机插接动画。耳塞缩小，使用短弧线和紧凑 Y 形分线；「更多 → 预览耳机接入」可直接查看效果。画报与五秒转轮序章继续只在进程被清理后的冷启动显示。见 [耳机效果与验证范围](docs/HEADPHONES.md)、[开场规则](docs/STARTUP-PROCESS.md)。下载 [Android 0.10.0 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.0)，附 SHA-256 校验文件与单文件应用预览；本轮无安卓设备，耳机实际连接事件尚未真机验证。
 
 **把熟悉的转轮和网易云音乐，放进一个口袋播放器。**
 
@@ -22,7 +22,7 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
 
 <p align="center"><img src="docs/images/frosted-silver.png" width="240" alt="冷银摄影棚：磨砂金属、高清 LCD 与柔和倒影"><img src="docs/images/frosted-black.png" width="240" alt="深色磨砂机身与低饱和摄影棚背景"></p>
 
-1. 下载并安装 [Android 0.9.2 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.9.2)。
+1. 下载并安装 [Android 0.10.0 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.0)。
 2. 点击底部「连接网易云」，再点击「保存并打开网易云」。
 3. 在网易云「扫一扫 → 相册」选择刚保存的二维码，确认授权后返回播放器。
 4. 进入「音乐」选择喜欢的音乐、我的歌单、每日推荐或私人漫游。离线音乐可直接进入「手机本地音乐」导入，不需要登录。
@@ -46,6 +46,7 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
 - **关注的歌手**：音乐菜单读取网易云收藏/订阅的歌手，分页浏览其歌曲并选择播放；新功能尚待真实账号联调。
 - **连续漫游**：通过私人 FM 获取推荐，队列接近结尾时自动补歌，过滤最近重复推荐，支持切歌和失败重试。
 - **金属三维机身**：按 Classic 的比例建模，采用细拉丝金属、方向性柔光反射、细倒角、浅凹转轮与分层屏框；光池和向下渐隐的倒影构成冷银摄影棚。
+- **耳机接入效果**：安卓检测到耳机类音频输出后，白色 3.5mm 插头沿机身顶部耳机孔插入，细线连接小型耳塞与线控；断开后拔出。蓝牙耳机触发同一虚拟有线效果，不改变真实音频输出。浏览器可手动预览，检测边界见 [耳机说明](docs/HEADPHONES.md)。
 - **高清 LCD**：保持经典菜单比例，默认四倍画布分辨率，并根据设备能力降档；正面 LCD 由浏览器独立合成，避开三维场景的二次缩放与玻璃泛白，随机身倾斜保持对齐。
 - **明显的倾斜体感**：手动开启后以当前拿握姿势校准，忽略 3° 内的小抖动；额外左右倾斜最多 12°、上下最多 8°，加快跟随响应，操作转轮时保持视角稳定。
 - **手机自适应**：手机上隐藏介绍、页眉和页脚，机身尽可能放大；横屏时工具移到右侧，适配安全区域和浏览器可视高度变化。
@@ -109,9 +110,9 @@ npm start
 .\Build-Android.ps1
 ```
 
-脚本构建 Debug APK，并运行安卓单元测试与 Lint。安装包生成到 `outputs/Pocket-Classic-0.8.0-debug.apk`，构建产物不会提交到 Git。若已安装网页开发依赖，脚本会先更新安卓界面资源；否则使用仓库中已打包的资源。安装运行不需要 Node.js。
+脚本构建 Debug APK，并运行安卓单元测试与 Lint。安装包生成到 `outputs/Pocket-Classic-0.10.0-debug.apk`，构建产物不会提交到 Git。若已安装网页开发依赖，脚本会先更新安卓界面资源；否则使用仓库中已打包的资源。安装运行不需要 Node.js。
 
-使用方式见上方「安卓独立使用」。0.3.0 起已移除地址和配对码输入；无需 `adb reverse` 或手机网关。安装包见 [Android 0.8.0 独立测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.8.0)，安装时可能需要允许当前来源安装应用。
+使用方式见上方「安卓独立使用」。0.3.0 起已移除地址和配对码输入；无需 `adb reverse` 或手机网关。安装包见 [Android 0.10.0 独立测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.0)，安装时可能需要允许当前来源安装应用。
 
 ## 开发与验证
 

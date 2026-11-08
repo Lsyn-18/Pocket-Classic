@@ -2,14 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createNativePlatform} from './native-platform.mjs';
 
-async function fixture(){
+async function fixture(initial={}){
   const messages=[],timers=new Map();let timer=0;
   const host={setTimeout:fn=>{timers.set(++timer,fn);return timer;},clearTimeout:id=>timers.delete(id)};
   const platform=createNativePlatform({postMessage:raw=>messages.push(JSON.parse(raw))},host);
   function respond(message,result={},error){platform.receive({type:'response',id:message.id,ok:!error,result,error});}
-  respond(messages[0],{positionMs:0,durationMs:0,playing:false,count:0,tracks:[],index:0,dark:false,haptics:true});await platform.ready;
+  respond(messages[0],{positionMs:0,durationMs:0,playing:false,count:0,tracks:[],index:0,dark:false,haptics:true,...initial});await platform.ready;
   return {platform,messages,timers,host,respond};
 }
+test('headphone listeners receive the cached boot state and independent route updates',async()=>{
+  const f=await fixture({headphones:{available:true,connected:true,kind:'wired'}}),states=[];
+  const stop=f.platform.onHeadphones(value=>states.push(value));assert.equal(states[0].kind,'wired');
+  f.platform.receive({type:'headphones',value:{available:true,connected:true,kind:'bluetooth'}});assert.equal(states.at(-1).kind,'bluetooth');
+  f.platform.receive({type:'headphones',value:{available:true,connected:false,kind:'none'}});assert.equal(states.at(-1).connected,false);stop();const n=states.length;
+  f.platform.receive({type:'headphones',value:{connected:true,kind:'usb'}});assert.equal(states.length,n);assert.equal(f.messages.length,1,'Observing routes must not send audio commands');
+});
 test('native API requests carry only a route and propagate errors',async()=>{
   const f=await fixture();const result=f.platform.api('daily');const message=f.messages.at(-1);
   assert.deepEqual(message.args,{route:'daily'});f.respond(message,{tracks:[{id:1}]});assert.deepEqual(await result,{tracks:[{id:1}]});

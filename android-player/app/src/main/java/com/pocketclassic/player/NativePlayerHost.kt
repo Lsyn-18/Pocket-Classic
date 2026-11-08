@@ -33,6 +33,7 @@ class NativePlayerHost(
     private val showOpening = vm.claimOpening()
     private val motion = NativeMotion(activity) { value -> emit(JSONObject().put("type", "orientation").put("value", value)) }
     private val battery = NativeBattery(activity) { value -> if (ready && foreground) emit(JSONObject().put("type", "battery").put("value", value)) }
+    private val headphones = NativeHeadphones(activity) { value -> if (ready && foreground) emit(JSONObject().put("type", "headphones").put("value", value)) }
     private val haptics = NativeHaptics(activity)
     private val artwork = NativeArtwork()
     val webView: WebView
@@ -76,7 +77,7 @@ class NativePlayerHost(
                     return WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
                 }
                 override fun onRenderProcessGone(view: WebView, detail: android.webkit.RenderProcessGoneDetail): Boolean {
-                    ready = false; destroyed = true; motion.destroy(); battery.stop()
+                    ready = false; destroyed = true; motion.destroy(); battery.stop(); headphones.stop()
                     (view.parent as? ViewGroup)?.removeView(view); view.destroy()
                     onError("系统释放了播放器界面，请重新打开应用。音乐仍由后台服务管理。"); return true
                 }
@@ -107,7 +108,7 @@ class NativePlayerHost(
                 val method = message.getString("method"); require(method in NativeContract.methods)
                 val args = message.optJSONObject("args") ?: JSONObject()
                 val result: Any = when (method) {
-                    "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true).put("battery", battery.read()).put("opening", showOpening).put("posterVersion",vm.posterVersion) }
+                    "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true).put("battery", battery.read()).put("headphones",headphones.read()).put("opening", showOpening).put("posterVersion",vm.posterVersion) }
                     "api" -> vm.browserApi(args.getString("route"))
                     "connection" -> { vm.showConnection(); JSONObject() }
                     "localScan", "localImport", "localFolder" -> localAction(method, args.optString("category", "device"))
@@ -146,16 +147,16 @@ class NativePlayerHost(
     fun resume() {
         if (destroyed) return
         foreground = true; webView.resumeTimers(); webView.onResume()
-        emit(JSONObject().put("type", "lifecycle").put("visible", true)); motion.foreground(true); battery.start()
+        emit(JSONObject().put("type", "lifecycle").put("visible", true)); motion.foreground(true); battery.start(); headphones.start()
         playback()
     }
     fun pause() {
-        foreground = false; motion.foreground(false); battery.stop()
+        foreground = false; motion.foreground(false); battery.stop(); headphones.stop()
         if (destroyed) return
         val packet = JSONObject().put("type", "lifecycle").put("visible", false)
         webView.evaluateJavascript("window.PocketClassicNative&&window.PocketClassicNative.receive(" + packet.toString() + ");") {
             if (!foreground && !destroyed) { webView.onPause(); webView.pauseTimers() }
         }
     }
-    fun destroy() { if (destroyed) return; destroyed = true; motion.destroy(); battery.stop(); webView.removeJavascriptInterface("PocketNative"); webView.destroy() }
+    fun destroy() { if (destroyed) return; destroyed = true; motion.destroy(); battery.stop(); headphones.stop(); webView.removeJavascriptInterface("PocketNative"); webView.destroy() }
 }
