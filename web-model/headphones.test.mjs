@@ -43,7 +43,7 @@ test('mirrored upright earpieces remain fixed while cable endpoints follow their
     h.update(.016,{tiltX:Math.sin(i)*4,tiltY:Math.cos(i)*4});model.updateMatrixWorld(true);
     assert.deepEqual(l.matrixWorld,lPose);assert.deepEqual(r.matrixWorld,rPose);
     for(const [bud,name]of [[l,'Headphone_left_cable'],[r,'Headphone_right_cable']]){
-      const connector=bud.localToWorld(new THREE.Vector3(0,-1.7,0)),wireEnd=ringCenter(h.group.getObjectByName(name),true);
+      const connector=bud.getObjectByName('Cable_anchor').getWorldPosition(new THREE.Vector3()),wireEnd=ringCenter(h.group.getObjectByName(name),true);
       assert.ok(connector.distanceTo(wireEnd)<1e-6,'Cable must stay attached to its fixed stem');
     }
     const plug=h.group.getObjectByName('Straight_TRRS_plug'),start=ringCenter(h.group.getObjectByName('Headphone_main_cable'),false);
@@ -60,8 +60,14 @@ test('accessory framing fits the model and upper cable inside the usable content
   }
 });
 test('plug seats on the actual socket and repeated connections reuse finite decorative geometry',()=>{
-  const model=new THREE.Group(),h=createHeadphones(model,D),geometries=[];h.group.traverse(o=>{if(o.geometry)geometries.push(o.geometry);});assert.ok(geometries.length<=12);
+  const model=new THREE.Group(),h=createHeadphones(model,D),geometries=[];h.group.traverse(o=>{if(o.geometry)geometries.push(o.geometry);});assert.ok(geometries.length<=16);
   h.setConnected(true);for(let i=0;i<30;i++)h.update(.05);const plug=h.group.getObjectByName('Straight_TRRS_plug');assert.ok(Math.abs(plug.position.x-D.jackX)<1e-8);assert.ok(Math.abs(plug.position.y-5.210)<1e-8);assert.ok(Math.abs(plug.position.z-D.portZ)<1e-8);
+  for(const name of ['Headphone_main_cable','Headphone_left_cable','Headphone_right_cable']){
+    const a=h.group.getObjectByName(name).geometry.attributes.position;let rear=0;
+    for(let i=0;i<a.count;i++)if(a.getY(i)<5){assert.ok(a.getZ(i)<-D.depth/2-.05,'The cable junction must stay behind the case');rear++;}
+    assert.ok(rear>8);
+  }
+  assert.ok(h.group.getObjectByName('Inline_remote').position.z<-D.depth/2-.08);
   for(let i=0;i<8;i++){h.setConnected(!!(i%2));for(let j=0;j<24;j++)h.update(.05);}
   const after=[];h.group.traverse(o=>{if(o.geometry){after.push(o.geometry);assert.ok(Array.from(o.geometry.attributes.position.array).every(Number.isFinite));const hits=[];o.raycast({},hits);assert.equal(hits.length,0);}});assert.deepEqual(after,geometries);
   h.dispose();h.dispose();assert.equal(model.children.length,0);

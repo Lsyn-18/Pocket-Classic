@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/branding/pocket-classic-icon.svg" width="128" alt="Pocket Classic 白银色软件图标"></p>
 
-> 当前版本为 **Android 0.10.1 独立测试版**：耳塞按参考姿态竖直固定、左右镜像对称，保留小尺寸；只有短线材随倾斜轻微摆动，并限制幅度。「更多 → 预览耳机接入」可直接查看效果。保留有线、USB 与蓝牙音频设备连接检测，以及仅在进程被清理后的冷启动显示画报和五秒转轮序章的规则。见 [耳机效果与验证范围](docs/HEADPHONES.md)、[开场规则](docs/STARTUP-PROCESS.md)。下载 [Android 0.10.1 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.1)，附 SHA-256 校验文件与单文件应用预览；本轮无安卓设备，耳机实际连接事件尚未真机验证。
+> 当前版本为 **Android 0.10.2 独立测试版**：按参考图重塑 EarPods 一体耳壳、嵌入式侧面网罩和偏置直柄，保持竖直对称摆放；主线、分线和线控收至机身背后，正面只露接线处的一小段，继续限制摆动幅度。「更多 → 预览耳机接入」可直接查看效果。保留有线、USB 与蓝牙音频设备连接检测，以及仅在进程被清理后的冷启动显示画报和五秒转轮序章的规则。见 [耳机效果与验证范围](docs/HEADPHONES.md)、[开场规则](docs/STARTUP-PROCESS.md)。下载 [Android 0.10.2 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.2)，附 SHA-256 校验文件与单文件应用预览；本轮无安卓设备，耳机实际连接事件尚未真机验证。
 
 **把熟悉的转轮和网易云音乐，放进一个口袋播放器。**
 
@@ -22,7 +22,7 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
 
 <p align="center"><img src="docs/images/frosted-silver.png" width="240" alt="冷银摄影棚：磨砂金属、高清 LCD 与柔和倒影"><img src="docs/images/frosted-black.png" width="240" alt="深色磨砂机身与低饱和摄影棚背景"></p>
 
-1. 下载并安装 [Android 0.10.1 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.1)。
+1. 下载并安装 [Android 0.10.2 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.2)。
 2. 点击底部「连接网易云」，再点击「保存并打开网易云」。
 3. 在网易云「扫一扫 → 相册」选择刚保存的二维码，确认授权后返回播放器。
 4. 进入「音乐」选择喜欢的音乐、我的歌单、每日推荐或私人漫游。离线音乐可直接进入「手机本地音乐」导入，不需要登录。
@@ -110,9 +110,9 @@ npm start
 .\Build-Android.ps1
 ```
 
-脚本构建 Debug APK，并运行安卓单元测试与 Lint。安装包生成到 `outputs/Pocket-Classic-0.10.1-debug.apk`，构建产物不会提交到 Git。若已安装网页开发依赖，脚本会先更新安卓界面资源；否则使用仓库中已打包的资源。安装运行不需要 Node.js。
+脚本构建 Debug APK，并运行安卓单元测试与 Lint。安装包生成到 `outputs/Pocket-Classic-0.10.2-debug.apk`，构建产物不会提交到 Git。若已安装网页开发依赖，脚本会先更新安卓界面资源；否则使用仓库中已打包的资源。安装运行不需要 Node.js。
 
-使用方式见上方「安卓独立使用」。0.3.0 起已移除地址和配对码输入；无需 `adb reverse` 或手机网关。安装包见 [Android 0.10.1 独立测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.1)，安装时可能需要允许当前来源安装应用。
+使用方式见上方「安卓独立使用」。0.3.0 起已移除地址和配对码输入；无需 `adb reverse` 或手机网关。安装包见 [Android 0.10.2 独立测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.10.2)，安装时可能需要允许当前来源安装应用。
 
 ## 开发与验证
 

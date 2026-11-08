@@ -2,6 +2,58 @@ import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {createHeadphoneMotion} from './headphone-motion.mjs';
 
+const shellProfile=new THREE.CatmullRomCurve3([
+    [-.65,0,0],[-.61,.23,.20],[-.48,.43,.35],[-.24,.55,.43],
+    [0,.565,.42],[.22,.51,.36],[.42,.40,.27],[.52,.31,.20],[.55,.285,.185]
+].map(p=>new THREE.Vector3(...p)));
+
+function earPodShell(){
+  // One continuous asymmetric shell, ending in an oval side opening.
+  const positions=[],indices=[],rings=32,radial=32;
+  for(let i=0;i<=rings;i++){
+    const p=shellProfile.getPoint(i/rings);
+    for(let j=0;j<=radial;j++){const a=j/radial*Math.PI*2;positions.push(p.x,.04+Math.cos(a)*p.y,.025+Math.sin(a)*p.z);}
+  }
+  for(let i=0;i<rings;i++)for(let j=0;j<radial;j++){const a=i*(radial+1)+j,b=a+radial+1;indices.push(a,a+1,b,a+1,b+1,b);}
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(positions.length/3*2),2));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
+}
+
+function earPodRim(){
+  const positions=[],indices=[],rings=[[.55,.285,.185],[.557,.270,.165],[.543,.248,.137]],radial=48;
+  for(const [x,y,z]of rings)for(let j=0;j<=radial;j++){const a=j/radial*Math.PI*2;positions.push(x,.04+Math.cos(a)*y,.025+Math.sin(a)*z);}
+  for(let i=0;i<rings.length-1;i++)for(let j=0;j<radial;j++){const a=i*(radial+1)+j,b=a+radial+1;indices.push(a,a+1,b,a+1,b+1,b);}
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(new Float32Array(positions.length/3*2),2));geometry.setIndex(indices);geometry.computeVertexNormals();return geometry;
+}
+
+function speakerWeave(){
+  const size=64,data=new Uint8Array(size*size*4);
+  for(let y=0;y<size;y++)for(let x=0;x<size;x++){
+    const hole=Math.hypot(x%8-3.5,y%8-3.5)<2.6,c=hole?17:57+(x+y)%3*4,i=(y*size+x)*4;
+    data[i]=c;data[i+1]=c+3;data[i+2]=c+4;data[i+3]=255;
+  }
+  const texture=new THREE.DataTexture(data,size,size);texture.colorSpace=THREE.SRGBColorSpace;texture.generateMipmaps=true;texture.minFilter=THREE.LinearMipmapLinearFilter;texture.needsUpdate=true;return texture;
+}
+
+function sideLetter(right){
+  const shape=new THREE.Shape();
+  if(!right){shape.moveTo(0,0);shape.lineTo(0,.12);shape.lineTo(.01,.12);shape.lineTo(.01,.01);shape.lineTo(.07,.01);shape.lineTo(.07,0);}
+  else{
+    shape.moveTo(0,0);shape.lineTo(0,.12);shape.lineTo(.045,.12);shape.quadraticCurveTo(.075,.12,.075,.088);shape.quadraticCurveTo(.075,.06,.044,.06);shape.lineTo(.082,0);shape.lineTo(.067,0);shape.lineTo(.029,.058);shape.lineTo(.011,.058);shape.lineTo(.011,0);
+    const hole=new THREE.Path();hole.moveTo(.011,.108);hole.lineTo(.041,.108);hole.quadraticCurveTo(.063,.108,.063,.088);hole.quadraticCurveTo(.063,.070,.041,.070);hole.lineTo(.011,.070);shape.holes.push(hole);
+  }
+  shape.closePath();const geometry=new THREE.ShapeGeometry(shape,8);geometry.translate(-.035,-.04,0);if(right){geometry.scale(-1,1,1);const index=geometry.index;for(let i=0;i<index.count;i+=3){const b=index.getX(i+1);index.setX(i+1,index.getX(i+2));index.setX(i+2,b);}}
+  geometry.translate(.16,-.02,0);
+  // Project the printed letter onto the curved casing instead of burying a flat decal.
+  const positions=geometry.attributes.position;
+  for(let i=0;i<positions.count;i++){
+    const x=positions.getX(i),y=positions.getY(i);let low=0,high=1;
+    for(let j=0;j<12;j++){const middle=(low+high)/2;if(shellProfile.getPoint(middle).x<x)low=middle;else high=middle;}
+    const p=shellProfile.getPoint((low+high)/2),v=(y-.04)/p.y;
+    positions.setZ(i,.025+p.z*Math.sqrt(Math.max(0,1-v*v))+.004);
+  }
+  geometry.computeVertexNormals();return geometry;
+}
+
 // Original geometry, based on Apple's public EarPods product photographs.
 // Coordinates are centimetres, like the Classic. No product image is shipped.
 export function createHeadphones(model,D){
@@ -9,7 +61,7 @@ export function createHeadphones(model,D){
   const white=new THREE.MeshPhysicalMaterial({color:'#e9ecec',roughness:.28,metalness:0,clearcoat:.65,clearcoatRoughness:.24});
   const metal=new THREE.MeshStandardMaterial({color:'#d9dddf',roughness:.20,metalness:1});
   const rubber=new THREE.MeshStandardMaterial({color:'#e1e5e5',roughness:.64,metalness:0});
-  const grille=new THREE.MeshStandardMaterial({color:'#181c1e',roughness:.88,metalness:.12});
+  const weave=speakerWeave(),grille=new THREE.MeshStandardMaterial({color:'#ffffff',map:weave,roughness:.88,metalness:.12});
   const print=new THREE.MeshBasicMaterial({color:'#a6afb4',toneMapped:false});
   // Rest on the metal rim, slightly above the coplanar dark socket interior.
   const socketY=5.210,plug=new THREE.Group(),earbuds=new THREE.Group();group.add(plug,earbuds);
@@ -30,17 +82,19 @@ export function createHeadphones(model,D){
     // Fixed, upright and mirrored: the two speaker openings face inward.
     // Object transforms retain correct winding for the mirrored right shell.
     const bud=new THREE.Group();bud.name=side<0?'EarPod_L':'EarPod_R';
-    bud.position.set(side*.85,6.72,.32);bud.scale.set(-side*.68,.68,.68);earbuds.add(bud);
+    bud.position.set(side*.85,6.72,.32);bud.rotation.y=side*.23;bud.scale.set(-side*.68,.68,.68);earbuds.add(bud);
     const local=(material,geometry,p=[0,0,0],r=[0,0,0],s=[1,1,1])=>{
       part(bud,material,geometry,p,r,s);
     };
-    local(white,sphere(),[0,0,0],[0,0,0],[.62,.56,.41]);
-    local(white,sphere(),[.43,.02,.20],[0,.28,0],[.27,.40,.23]);
-    local(white,lathe([[0,-1.70],[.115,-1.70],[.14,-1.58],[.15,-.25],[.22,-.13],[0,-.13]]));
-    local(grille,sphere(),[.705,.02,.32],[0,.95,0],[.16,.30,.024]);
-    local(grille,new THREE.CapsuleGeometry(.052,.17,3,8),[-.19,.02,.389],[0,0,Math.PI/2],[1,1,.14]);
+    local(white,earPodShell());local(white,earPodRim());
+    local(white,lathe([[0,-1.95],[.115,-1.95],[.13,-1.85],[.14,-.40],[.20,-.24],[0,-.24]]),[-.22,0,.025]);
+    local(rubber,lathe([[0,-2.08],[.075,-2.08],[.09,-2.03],[.09,-1.95],[0,-1.95]]),[-.22,0,.025]);
+    local(grille,new THREE.CircleGeometry(1,48),[.539,.04,.025],[0,Math.PI/2,0],[.132,.244,1]);
+    local(grille,sphere(),[-.30,.045,.437],[0,0,0],[.135,.045,.012]);
     local(grille,new THREE.CapsuleGeometry(.025,.12,3,8),[0,.34,-.29],[.2,0,0],[1,1,.14]);
-    bud.updateMatrix();tails.push(new THREE.Vector3(0,-1.7,0).applyMatrix4(bud.matrix));
+    local(print,sideLetter(side>0));
+    const anchor=new THREE.Object3D();anchor.name='Cable_anchor';anchor.position.set(-.22,-2.08,.025);bud.add(anchor);
+    bud.updateMatrix();tails.push(anchor.position.clone().applyMatrix4(bud.matrix));
   }
   // The small right-branch remote moves with the cable, never with the earpieces.
   const remote=new THREE.Group();remote.name='Inline_remote';group.add(remote);
@@ -68,14 +122,15 @@ export function createHeadphones(model,D){
   function updateGeometry(next){
     const rise=(1-next.insert)*2.15,s=next.sway,z=next.swayDepth;
     plug.position.set(D.jackX,socketY+rise,D.portZ);
-    const point=(x,y,depth)=>new THREE.Vector3(x,y,depth),split=point(0,5.33,.32);
+    const point=(x,y,depth)=>new THREE.Vector3(x,y,depth),rear=-D.depth/2-.18,split=point(0,4.25,rear);
     const start=point(D.jackX,socketY+rise+1.20,D.portZ);
-    lead.update([start,point(2.40+s,6.72+rise*.60,.10+z),point(2.10+s,5.68+rise*.12,.20+z),point(.45+s*.4,5.26,.44+z*.4),split]);
-    left.update([split,point(-.50+s*.7,5.35,.32+z*.7),point(-.85+s*.4,5.42,.32+z*.4),tails[0]]);
-    // This straight section gives the remote a stable place along the right branch.
-    const remoteX=.85+s*.4,remoteZ=.32+z*.4;
-    right.update([split,point(.50+s*.7,5.35,.32+z*.7),point(remoteX,5.40,remoteZ),point(remoteX,5.50,remoteZ),tails[1]]);
-    remote.position.set(remoteX,5.45,remoteZ);
+    // Fold directly behind the plug, then route the complete junction behind the case.
+    lead.update([start,point(D.jackX+s*.15,6.45+rise,-.17+z*.2),point(D.jackX+s*.35,6.27+rise*.8,rear+z),point(1.85+s,4.80+rise*.1,rear+z),split]);
+    const [l,r]=tails;
+    left.update([split,point(l.x+s*.6,4.55,rear+z*.6),point(l.x+s*.3,5.10,rear+z*.3),point(l.x,5.27,-.35),l]);
+    const remoteX=r.x+s*.4,remoteZ=rear+z*.4;
+    right.update([split,point(r.x+s*.6,4.55,rear+z*.6),point(remoteX,4.60,remoteZ),point(remoteX,4.78,remoteZ),point(r.x+s*.3,5.10,rear+z*.3),point(r.x,5.27,-.35),r]);
+    remote.position.set(remoteX,4.69,remoteZ);
   }
   updateGeometry({...pose,insert:0,sway:0,swayDepth:0});
   group.traverse(o=>{o.userData.decorative=true;o.raycast=()=>{};});
@@ -86,6 +141,6 @@ export function createHeadphones(model,D){
       const key=[pose.progress.toFixed(5),pose.sway.toFixed(4),pose.swayDepth.toFixed(4)].join(':');
       if(key!==last){last=key;updateGeometry(pose);}
       return pose;
-    },dispose(){if(disposed)return;disposed=true;group.traverse(o=>o.geometry?.dispose());for(const material of [white,metal,rubber,grille,print])material.dispose();model.remove(group);}
+    },dispose(){if(disposed)return;disposed=true;group.traverse(o=>o.geometry?.dispose());for(const material of [white,metal,rubber,grille,print])material.dispose();weave.dispose();model.remove(group);}
   };
 }
