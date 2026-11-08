@@ -5,10 +5,11 @@ import {dimensions as D} from './geometry.mjs';
 import {sampleOpening,createOpeningPlayback,openingTiming} from './startup.mjs';
 import {createStartupView} from './startup-view.mjs';
 import {createStartupRenderer} from './startup-renderer.mjs';
+import {posterTiming,createLoadingPoster} from './loading-poster.mjs';
 
 function view(width,height,padding={}){
   const {left=4,right=4,top=8,bottom=76}=padding,w=width-left-right,h=height-top-bottom;
-  const units=Math.max(11.38,6.34/(w/h))/h,cx=(left+width-right)/2,cy=(top+height-bottom)/2;
+  const units=Math.max(11.90,6.95/(w/h))/h,cx=(left+width-right)/2,cy=(top+height-bottom)/2;
   return {width,height,contentHeight:h,centerX:cx,centerY:cy,frustum:{left:-cx*units,right:(width-cx)*units,top:cy*units-.28,bottom:-(height-cy)*units-.28}};
 }
 function project(x,y,frame,v){const b=frame.bounds,camera=new THREE.OrthographicCamera(b.left,b.right,b.top,b.bottom,.1,60);camera.position.z=20;camera.updateMatrixWorld();const p=new THREE.Vector3(x,y,.507).project(camera);return {x:(p.x*.5+.5)*v.width,y:(.5-p.y*.5)*v.height};}
@@ -73,11 +74,42 @@ test('GPU reveal restores scene and renderer state on failure, and releases its 
   const count=calls.length;gpu.render(source,new THREE.Camera(),frame,v);assert.equal(calls.length,count);
 });
 
+test('skipping while shaders compile defers disposal and never compiles released programs',async()=>{
+  let releaseCompile,compiles=0,target,disposed=0;
+  const deferred=new Promise(resolve=>{releaseCompile=resolve;});
+  const renderer={capabilities:{maxSamples:4},getRenderTarget:()=>null,setRenderTarget(value){if(value){target=value;target.addEventListener('dispose',()=>disposed++);}},compileAsync(){compiles++;return deferred;}};
+  const gpu=createStartupRenderer(renderer,{}),warming=gpu.warm(new THREE.Scene(),new THREE.Camera());
+  gpu.dispose();assert.equal(disposed,0);assert.equal(compiles,1);releaseCompile();await warming;
+  assert.equal(disposed,1);assert.equal(compiles,1);gpu.dispose();assert.equal(disposed,1);assert.ok(target);
+});
+
+test('poster timing waits for real readiness, shortens repeat visits and removes motion when requested',()=>{
+  assert.deepEqual(posterTiming({started:0,ready:100}),{start:1080,fade:320});
+  assert.deepEqual(posterTiming({first:false,started:0,ready:100}),{start:300,fade:320});
+  assert.deepEqual(posterTiming({started:0,ready:4000}),{start:4200,fade:320});
+  assert.deepEqual(posterTiming({reduced:true,started:0,ready:4000}),{start:4000,fade:200});
+});
+
 // Exercise the real input/lifecycle controller without creating a WebGL context.
 class Element extends EventTarget {
   constructor(){super();this.style={removeProperty(key){delete this[key.replace(/-([a-z])/g,(_,c)=>c.toUpperCase())];}};this.children=[];this.dataset={};this.inert=false;this.classes=new Set();this.classList={add:value=>this.classes.add(value),remove:value=>this.classes.delete(value)};}
   setAttribute(){} append(...items){for(const item of items){item.parent=this;this.children.push(item);}} contains(item){return item===this||this.children.includes(item);} remove(){if(this.parent)this.parent.children=this.parent.children.filter(item=>item!==this);} focus(){document.activeElement=this;}
 }
+test('Android poster uses native version persistence when browser storage is unavailable',async()=>{
+  const original={document:globalThis.document,matchMedia:globalThis.matchMedia,setTimeout:globalThis.setTimeout,clearTimeout:globalThis.clearTimeout};
+  try{
+    for(const version of ['0.9.0','0.8.2']){
+      const element=new Element(),query=new EventTarget(),timers=new Map(),marked=[];let id=0,storageReads=0;
+      query.matches=false;globalThis.document={getElementById:()=>element};globalThis.matchMedia=()=>query;
+      globalThis.setTimeout=(fn,ms)=>(timers.set(++id,{fn,ms}),id);globalThis.clearTimeout=id=>timers.delete(id);
+      const poster=createLoadingPoster({preferences:Promise.resolve({posterVersion:version}),markReady:async version=>marked.push(version),storage:{getItem(){storageReads++;throw Error('Storage disabled');}}});
+      await Promise.resolve();assert.equal(timers.size,0);poster.warm();
+      assert.equal(storageReads,0);assert.deepEqual(marked,['0.9.0']);
+      const first=[...timers.values()][0];assert.ok(version==='0.9.0'?first.ms<500:first.ms>900);
+      first.fn();assert.equal(element.classes.has('is-leaving'),true);[...timers.values()].at(-1).fn();await poster.finished;assert.equal(poster.active,false);
+    }
+  }finally{Object.assign(globalThis,original);}
+});
 test('skip, native back, reduced motion and background release input and all presentation styles',async()=>{
   const original={document:globalThis.document,window:globalThis.window,matchMedia:globalThis.matchMedia};
   try{

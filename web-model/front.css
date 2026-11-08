@@ -39,11 +39,13 @@ body{background:radial-gradient(ellipse at 50% 24%,#ffffff 0%,#f6f8fb 52%,#eaf0f
   .compact-player .dialog{max-height:calc(var(--app-height,100dvh) - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow:auto;padding:22px}
 
 .native-app .layout{height:100%}
-.ambient-backdrop{--track-accent:145,169,191;position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse at 17% 24%,#e7f1f98c,transparent 49%),radial-gradient(ellipse at 83% 42%,#fff7e43d,transparent 44%),radial-gradient(ellipse at 50% 82%,rgba(var(--track-accent),.13),transparent 56%),linear-gradient(180deg,#f7f9fc,#edf2f7 70%,#e7eef5);box-shadow:inset 0 0 12vw #59728d0b}
+.ambient-backdrop{--track-accent:133,160,184;position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(ellipse 26% 36% at 13% 44%,#fafafa9e,transparent),radial-gradient(ellipse 24% 34% at 87% 44%,#fafafa8f,transparent),linear-gradient(90deg,#505a6429,transparent 26%,transparent 74%,#505a6429),radial-gradient(ellipse 27% 52% at 50% 46%,#50668018,transparent),radial-gradient(ellipse 78% 26% at 50% 94%,rgba(var(--track-accent),.26),transparent),radial-gradient(ellipse 40% 44% at 100% 22%,#ffeed475,transparent),radial-gradient(ellipse 44% 48% at 0% 14%,#b2cfef8c,transparent),radial-gradient(ellipse 60% 38% at 50% -6%,#fafafa,#fafafad1 34%,transparent 78%),linear-gradient(180deg,#fcfcfa,#f5f7f8 26%,#eaf0f6 58%,#dde7f1 82%,#d3dfec);box-shadow:inset 0 0 20vw #4e678411,inset 0 0 5vw #4e67840b}
+.ambient-backdrop:before{content:'';position:absolute;inset:0;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23808080' filter='url(%23grain)' d='M0 0h140v140H0z'/%3E%3C/svg%3E");background-size:140px 140px;opacity:.05;pointer-events:none}
 .visual-baseline .ambient-backdrop{display:none}
 body:not(.visual-baseline) header,body:not(.visual-baseline) .layout,body:not(.visual-baseline) footer{position:relative;z-index:1}
 body.dark:not(.visual-baseline){background:#101a29;color:#dce7f2}
-.dark:not(.visual-baseline) .ambient-backdrop{background:radial-gradient(ellipse at 15% 20%,#29405c7d,transparent 54%),radial-gradient(ellipse at 86% 43%,#78674518,transparent 46%),radial-gradient(ellipse at 50% 83%,rgba(var(--track-accent),.12),transparent 55%),linear-gradient(#172334,#101b2b 68%,#0c1522);box-shadow:inset 0 0 13vw #030a1540}
+.dark:not(.visual-baseline) .ambient-backdrop{background:radial-gradient(ellipse 26% 36% at 13% 44%,#0a101a8c,transparent),radial-gradient(ellipse 24% 34% at 87% 44%,#0a101a8c,transparent),radial-gradient(ellipse 27% 52% at 50% 46%,#03080f33,transparent),radial-gradient(ellipse 78% 26% at 50% 94%,rgba(var(--track-accent),.26),transparent),radial-gradient(ellipse 40% 44% at 100% 22%,#c68e5026,transparent),radial-gradient(ellipse 44% 48% at 0% 14%,#3e70b057,transparent),radial-gradient(ellipse 60% 38% at 50% -6%,#9ec4f438,transparent 78%),linear-gradient(180deg,#1c2839,#16202f 36%,#101926 72%,#0b1219);box-shadow:inset 0 0 20vw #03080f73}
+.dark .ambient-backdrop:before{opacity:.075}
 .dark:not(.visual-baseline) :is(.brand,.intro h1,.note b){color:#dde7f1}
 .dark:not(.visual-baseline) :is(.brand span,.intro p,.note p,.quiet,footer){color:#9cafc3}
 .dark:not(.visual-baseline) .player-tools,.dark:not(.visual-baseline) .player-options-panel{background:#263649dc;border-color:#a4b8ca29}
@@ -103,10 +105,10 @@ body.dark:not(.visual-baseline){background:#101a29;color:#dce7f2}
 .compact-player #modelViewport{inset:0;padding:max(8px,env(safe-area-inset-top)) max(4px,env(safe-area-inset-right)) calc(76px + env(safe-area-inset-bottom)) max(4px,env(safe-area-inset-left))}
 .compact-player.landscape-player #modelViewport{inset:0;padding:max(6px,env(safe-area-inset-top)) calc(76px + env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left))}
 .ambient-backdrop{overflow:hidden}
-.ambient-backdrop:after{content:'';position:absolute;inset:-12%;background:radial-gradient(ellipse at 50% 58%,rgba(var(--track-accent),.28),transparent 58%);opacity:.35;animation:ambient-breath 8s ease-in-out infinite;will-change:opacity,transform}
-.dark .ambient-backdrop:after{background:radial-gradient(ellipse at 50% 58%,rgba(var(--track-accent),.23),transparent 60%)}
-.is-playing .ambient-backdrop:after{animation-duration:5s}
-@keyframes ambient-breath{0%,100%{opacity:.3;transform:scale(.96)}50%{opacity:1;transform:scale(1.08)}}
+.ambient-backdrop:after{content:'';position:absolute;inset:-12%;background:radial-gradient(ellipse at 50% 58%,rgba(var(--track-accent),.22),transparent 58%);opacity:.35;animation:ambient-breath 12s ease-in-out infinite;will-change:opacity,transform}
+.dark .ambient-backdrop:after{background:radial-gradient(ellipse at 50% 58%,rgba(var(--track-accent),.22),transparent 60%)}
+.is-playing .ambient-backdrop:after{animation-duration:8s}
+@keyframes ambient-breath{0%,100%{opacity:.35;transform:scale(.98)}50%{opacity:.85;transform:scale(1.02)}}
 .reduce-motion .ambient-backdrop:after{animation:none;opacity:.5;transform:none;will-change:auto}
 @media(prefers-reduced-motion:reduce){.ambient-backdrop:after{animation:none;opacity:.5;transform:none;will-change:auto}}
 /* Focus the heading on open so short screens start at the beginning of help. */
@@ -130,3 +132,26 @@ body.dark:not(.visual-baseline){background:#101a29;color:#dce7f2}
 @media(prefers-reduced-motion:reduce){.three-ready :is(header,.intro,.notes,footer,#playerTools,#modelStatus){transition:none}}
 .startup-playing .ambient-backdrop:after{animation-play-state:paused;opacity:.35;transform:none}
 .startup-playing #modelViewport>canvas.lcd-surface{opacity:0}
+/* Both openings share the studio backdrop; the poster adds no image request. */
+.loading-poster{position:fixed;inset:0;z-index:12;isolation:isolate;display:grid;place-items:center;color:#536d85;transition:opacity .32s ease,transform .32s ease}
+.loading-poster .poster-backdrop{position:absolute;z-index:-1}
+.loading-poster .poster-backdrop:after{animation:none;opacity:.35;transform:none;will-change:auto}
+.poster-content{text-align:center;transform:translateY(-10px)}
+.poster-outline{display:block;margin:0 auto 27px;stroke:#8ea6bd;stroke-width:1.5;opacity:0;animation:poster-outline .42s .12s ease forwards}
+.poster-wordmark{font:11px/1.6 'Helvetica Neue','Microsoft YaHei',sans-serif;letter-spacing:.28em;opacity:0;animation:poster-wordmark .42s .24s ease forwards}
+.poster-caption{font:11px/1.8 'Helvetica Neue','Microsoft YaHei',sans-serif;margin:10px 0 0;letter-spacing:.08em;opacity:0;animation:poster-wordmark .42s .24s ease forwards}
+.dark .loading-poster{color:#b8ccdf}
+.poster-progress{position:absolute;bottom:18%;left:calc(50% - 46px);width:92px;height:2px;background:#899ebc26;overflow:hidden;opacity:0;animation:poster-wordmark .3s .36s ease forwards}
+.poster-progress i{display:block;width:100%;height:100%;background:#8ea6bd;transform:scaleX(.08);transform-origin:left;animation:poster-wait .9s .36s ease forwards}
+.loading-poster.is-ready .poster-progress i{animation:none;transform:scaleX(1);transition:transform .2s ease}
+.loading-poster.is-leaving{opacity:0;transform:scale(1.02);pointer-events:none}
+@keyframes poster-outline{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+@keyframes poster-wordmark{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes poster-wait{to{transform:scaleX(.8)}}
+.feedback-controls{position:absolute;left:0;top:0;width:320px;height:240px;transform-origin:0 0;pointer-events:none;z-index:3}
+.feedback-controls button{position:absolute;left:244px;top:94px;width:64px;height:44px;opacity:0;pointer-events:auto;border:0;background:transparent;color:#33506a;font:12px 'Microsoft YaHei',sans-serif;cursor:pointer}
+.feedback-controls button:focus-visible{opacity:1;background:#fbfcfe;outline:2px solid #33506a;outline-offset:-3px;border-radius:4px}
+.feedback-controls button[hidden]{display:none}
+.reduce-motion .loading-poster{transition:opacity .2s;transform:none}
+.reduce-motion :is(.poster-outline,.poster-wordmark,.poster-caption,.poster-progress){opacity:1;transform:none;animation:none}
+@media(prefers-reduced-motion:reduce){.loading-poster{transition:opacity .2s;transform:none}.poster-outline,.poster-wordmark,.poster-caption,.poster-progress{opacity:1;transform:none;animation:none}}

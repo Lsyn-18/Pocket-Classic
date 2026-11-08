@@ -6,6 +6,11 @@ import kotlin.math.cos
 import kotlin.math.sin
 
 class NativeContractTest {
+    @Test fun posterMarkerAcceptsOnlyVersionNumbers() {
+        assertTrue("posterReady" in NativeContract.methods)
+        for (value in listOf("0.9.0","1.2.3","999.999.999")) assertTrue(NativeContract.validPosterVersion(value))
+        for (value in listOf("","../0.9.0","0.9.0-beta","0.9.1000")) assertFalse(NativeContract.validPosterVersion(value))
+    }
     @Test fun musicRoutesAreWhitelisted() {
         for (route in listOf("status", "playlists", "daily", "roam", "tracks?id=123456789", "artists?offset=0", "artist-tracks?id=123&offset=100")) assertTrue(NativeContract.allowedApi(route))
         for (route in listOf("resolve", "logout", "qr", "https://evil.example", "tracks?id=0", "tracks?id=1&cookie=x", "tracks?id=../1", "tracks?id=1/2")) assertFalse(NativeContract.allowedApi(route))

@@ -46,6 +46,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var openingClaimed = false
     fun claimOpening(): Boolean = (!openingClaimed).also { openingClaimed = true }
     private val store = MusicSessionStore(application)
+    val posterVersion: String get() = store.posterVersion
+    fun markPosterReady(version: String) { require(NativeContract.validPosterVersion(version));store.posterVersion=version }
     private val mediaVolume = NativeMediaVolume(application)
     private val api = NetEaseApi(store)
     val localMusic = LocalMusicLibrary(application)

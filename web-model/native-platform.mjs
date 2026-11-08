@@ -71,6 +71,7 @@ export function createNativePlatform(transport, host = window) {
   const platform={
     audio,request,get transitioning(){return transitioning;},beginTransition(){resetSeek();transitioning=true;},
     api:route=>request('api',{route}),openConnection:()=>request('connection'),
+    posterReady:version=>request('posterReady',{version}),
     localAction:(method,category)=>request(method,{category}),
     async playQueue(tracks,index,mode,options){
       resetSeek();transitioning=true;

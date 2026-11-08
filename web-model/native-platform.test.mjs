@@ -15,6 +15,9 @@ test('native API requests carry only a route and propagate errors',async()=>{
   assert.deepEqual(message.args,{route:'daily'});f.respond(message,{tracks:[{id:1}]});assert.deepEqual(await result,{tracks:[{id:1}]});
   const failure=f.platform.api('roam');f.respond(f.messages.at(-1),{},'连接已失效');await assert.rejects(failure,/连接已失效/);
 });
+test('poster completion persists only a version marker through the native bridge',async()=>{
+  const f=await fixture(),done=f.platform.posterReady('0.9.0');assert.equal(f.messages.at(-1).method,'posterReady');assert.deepEqual(f.messages.at(-1).args,{version:'0.9.0'});f.respond(f.messages.at(-1));await done;
+});
 
 test('offline queues send catalog IDs without accepting paths from the page',async()=>{
   const f=await fixture();const pending=f.platform.playQueue([{id:-7,name:'Local',uri:'file:///untrusted'}],0,'local',{});const message=f.messages.at(-1);assert.deepEqual(message.args.tracks,[{id:-7}]);

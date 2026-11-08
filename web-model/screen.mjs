@@ -42,13 +42,13 @@ export function makeScreen(app,{pixelScale=4,maxAnisotropy=1,baseline=visualBase
     const s=neutral?{page:'home',selected:0,title:'iPod',battery:app.state.battery}:app.state,a=app.audio;
     const selection=[s.page,s.selected,s.current?.id,s.mode,s.seeking].join(':');if(selection!==selectionKey){selectionKey=selection;selectedAt=now;}
     artwork.get(s.current);
-    const key=JSON.stringify([s.page,s.selected,s.title,s.current,s.battery,s.nickname,s.connected,s.busy,s.hold,s.sleep,s.mode,s.seeking,s.trial,s.queueMode,s.queue?.length,s.queueIndex,s.tracks?.length,s.playlists?.length,s.artists?.length,s.artistMore,s.tracksMore,s.quality,s.actualQuality,s.buffering,s.haptics,s.shuffle,s.repeat,s.dark,s.theme,s.largeText,s.reducedMotion,s.problem,s.feedback,artwork.revision,Math.floor((a?.currentTime||0)*(s.seeking?10:1)),a?.paused,a?.volume,app.footerText?.(),animated?Math.floor(now/50):0]);
+    const key=JSON.stringify([s.page,s.selected,s.title,s.current,s.battery,s.nickname,s.connected,s.busy,s.hold,s.sleep,s.mode,s.seeking,s.trial,s.queueMode,s.queue?.length,s.queueIndex,s.tracks?.length,s.playlists?.length,s.artists?.length,s.artistMore,s.tracksMore,s.quality,s.actualQuality,s.buffering,s.haptics,s.shuffle,s.repeat,s.dark,s.theme,s.largeText,s.reducedMotion,s.problem,s.feedback,s.feedbackLevel,s.feedbackAt,artwork.revision,Math.floor((a?.currentTime||0)*(s.seeking?10:1)),a?.paused,a?.volume,app.footerText?.(),animated?Math.floor(now/50):0]);
     if(!force&&key===lastKey)return;lastKey=key;animated=false;zones=[];listLayout=null;
     c.setTransform(scale,0,0,scale,0,0);c.fillStyle=s.sleep?'#151d28':'#fbfcfe';c.fillRect(0,0,320,240);
     if(s.sleep){texture.needsUpdate=true;return;}
     const head=c.createLinearGradient(0,0,0,24);head.addColorStop(0,'#f9fbfc');head.addColorStop(1,'#d6dee7');c.fillStyle=head;c.fillRect(0,0,320,24);c.fillStyle='#b3bfcc';c.fillRect(0,23,320,1);
     text(s.title,8,12,208,14,'#202c38',600);if(s.hold)text('HOLD',221,12,35,9,'#475b6c',600);
-    const glyph=!neutral&&playbackGlyph(s.current,a?.paused);if(glyph){c.fillStyle='#246ab4';if(glyph==='pause'){c.fillRect(265,7,3,10);c.fillRect(270,7,3,10);}else{c.beginPath();c.moveTo(265,7);c.lineTo(273,12);c.lineTo(265,17);c.closePath();c.fill();}}drawBattery(c,s.battery);
+    const glyph=!neutral&&playbackGlyph(s.current,a?.paused);if(glyph){c.fillStyle='#246ab4';if(glyph==='pause'){c.fillRect(265,7,3,10);c.fillRect(270,7,3,10);}else{c.beginPath();c.moveTo(265,7);c.lineTo(273,12);c.lineTo(265,17);c.closePath();c.fill();}}if(s.feedback&&s.feedbackLevel==='state')text(s.feedback,276,12,42,10,'#33506a');else drawBattery(c,s.battery);
     if(s.page==='playing'&&s.current){
       const t=s.current;album(12,38,90,t);text(t.name,114,51,194,s.largeText?17:15,'#172b3e',600,true);text(t.artist,114,76,194,13,'#40576c');text(t.album||'未知专辑',114,98,194,11,'#53677c');
       const status=s.seeking?(s.seeking>0?'快进 ››':'‹‹ 快退'):s.buffering?'正在缓冲…':s.trial?'试听片段':a.paused?'已暂停':'正在播放';
@@ -79,17 +79,31 @@ export function makeScreen(app,{pixelScale=4,maxAnisotropy=1,baseline=visualBase
       listLayout={...layout,count:list.length};
     }
     c.fillStyle='#e8eef4';c.fillRect(0,224,320,16);const count=app.entries?.().length||0,position=count>5&&s.page!=='playing'?`${(s.selected||0)+1}/${count}`:'';
-    text(neutral?'Pocket Classic':app.footerText?.()||'MENU 返回 · 中央键选择',7,232,position?262:306,10,'#4e657b');if(position)text(position,277,232,38,9,'#526a80');
+    text(neutral?'Pocket Classic':s.problem?'点此重试 · '+s.problem.message:app.footerText?.()||'MENU 返回 · 中央键选择',7,232,position?262:306,10,s.problem?'#33506a':'#4e657b');if(position)text(position,277,232,38,9,'#526a80');
     if(s.busy){c.fillStyle='#fbfcfef2';c.fillRect(0,24,320,200);text('正在读取'+s.title+'…',27,112,266,15,'#365874',500);text('按 MENU 可返回',27,142,266,12,'#526a80');}
-    if(s.problem){zones=[];listLayout=null;c.fillStyle='#fbfcfe';c.fillRect(0,24,320,200);text('暂时未能完成',20,56,280,16,'#293f52',600);wrap(s.problem.message,20,88,280,12,3);button(s.problem.login?'重新连接':'重试',20,163,132,'retry');button(canAdvance(s)?'下一首':'返回列表',164,163,132,canAdvance(s)?'next':'back',false);}
-    if(s.feedback){c.fillStyle='#20354aef';c.fillRect(6,193,308,29);text(s.feedback,15,207,290,11,'#fff',500);}
+    if(s.problem)zones.push({x:0,y:224,width:320,height:16,action:'retry'});
+    if(s.feedback&&s.feedbackLevel!=='state'){
+      const warning=s.feedbackLevel==='warning',duration=warning?2400:1200,elapsed=Date.now()-(s.feedbackAt||Date.now());
+      const fade=s.reducedMotion||systemReduced?.matches?1:Math.max(0,Math.min(1,elapsed/120,(duration-elapsed)/160));
+      animated=true;c.save();c.globalAlpha=fade;
+      if(warning){
+        c.fillStyle='#fbfcfe';c.strokeStyle='#c9d6e2';c.lineWidth=1;c.shadowColor='rgba(32,53,74,.08)';c.shadowBlur=12;c.shadowOffsetY=4;
+        c.beginPath();c.roundRect(8,34,304,108,4);c.fill();c.shadowColor='transparent';c.stroke();
+        wrap(s.feedback,20,56,280,13,2,'#33506a');
+        const underlying=zones;zones=[];
+        if(s.problem){button(s.problem.login?'重新连接':'重试',20,100,96,'retry',false);button(canAdvance(s)?'下一首':'返回列表',124,100,108,canAdvance(s)?'next':'back',false);}
+        text('知道了',252,115,50,12,'#33506a',500);zones.push({x:244,y:94,width:64,height:44,action:'dismiss'});
+        zones.push({x:8,y:34,width:304,height:108,action:'dismiss'},...underlying);
+      }else{c.fillStyle='#f7fafc';c.fillRect(0,218,320,22);c.fillStyle='#dbe4ec';c.fillRect(0,218,320,1);text(s.feedback,14,230,292,12,'#3d5670');}
+      c.restore();
+    }
     if(!baseline){c.strokeStyle='rgba(27,46,68,.08)';c.lineWidth=.5;c.strokeRect(.25,24.25,319.5,199.5);}
     texture.needsUpdate=true;
   }
   draw(true);
   return {canvas,texture,draw,pixelScale:scale,dispose(){texture.dispose();},hit(x,y){
-    if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||x>320||y<24||y>=224)return null;
+    if(!Number.isFinite(x)||!Number.isFinite(y)||x<0||x>320||y<24||y>=240)return null;
     for(const zone of zones)if(x>=zone.x&&x<zone.x+zone.width&&y>=zone.y&&y<zone.y+zone.height)return zone.action;
-    if(!listLayout||x>listLayout.width)return null;const row=Math.floor((y-24)/listLayout.rowHeight);if(row>=listLayout.visible)return null;const index=listLayout.start+row;return index<listLayout.count?index:null;
+    if(y>=224||!listLayout||x>listLayout.width)return null;const row=Math.floor((y-24)/listLayout.rowHeight);if(row>=listLayout.visible)return null;const index=listLayout.start+row;return index<listLayout.count?index:null;
   },neutralTexture(){const copy=makeScreen({...app,state:{page:'home',selected:0,title:'iPod'},audio:{paused:true,currentTime:0,volume:.65},entries:()=>[],footerText:()=>''},{pixelScale:scale,maxAnisotropy,baseline});copy.draw(true,true);return copy.texture;}};
 }

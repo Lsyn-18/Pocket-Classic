@@ -101,7 +101,7 @@ class NativePlayerHost(
                 val method = message.getString("method"); require(method in NativeContract.methods)
                 val args = message.optJSONObject("args") ?: JSONObject()
                 val result: Any = when (method) {
-                    "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true).put("battery", battery.read()).put("opening", vm.claimOpening()) }
+                    "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true).put("battery", battery.read()).put("opening", vm.claimOpening()).put("posterVersion",vm.posterVersion) }
                     "api" -> vm.browserApi(args.getString("route"))
                     "connection" -> { vm.showConnection(); JSONObject() }
                     "localScan", "localImport", "localFolder" -> localAction(method, args.optString("category", "device"))
@@ -112,6 +112,7 @@ class NativePlayerHost(
                         vm.command(method, args); JSONObject()
                     }
                     "preferences" -> { vm.preferences(args); JSONObject() }
+                    "posterReady" -> { vm.markPosterReady(args.getString("version")); JSONObject() }
                     "motionAvailable" -> JSONObject().put("available", motion.available)
                     "motion" -> { motion.enable(args.optBoolean("enabled")); JSONObject() }
                     "haptic" -> { if (foreground) haptics.tick(); JSONObject() }

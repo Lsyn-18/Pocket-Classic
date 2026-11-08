@@ -118,6 +118,7 @@ class StartupAnimationDeviceTest {
                 window.openingProbe={frames:[],phaseFrames:[],phases:{},wheel:[],hold:[],start:performance.now(),done:false};
                 (function sample(){
                   const q=window.openingProbe,h=document.getElementById('modelViewport'),phase=h.dataset.opening,now=performance.now();
+                  if(!document.getElementById('loadingPoster'))q.visibleStart??=now;
                   q.frames.push(now);q.phaseFrames.push(phase);(q.phases[phase]??=[]).push(now);
                   const ring=document.querySelector('.startup-rings i');
                   if(phase==='wheel'&&ring)q.wheel.push({diameter:ring.getBoundingClientRect().width,x:ring.getBoundingClientRect().x,y:ring.getBoundingClientRect().y});
@@ -129,7 +130,7 @@ class StartupAnimationDeviceTest {
             val result = value("""
                 (()=>{const q=window.openingProbe,dt=q.frames.slice(1).map((v,i)=>v-q.frames[i]),sorted=dt.slice().sort((a,b)=>a-b);
                 const span=key=>q.phases[key].at(-1)-q.phases[key][0],range=key=>Math.max(...q.wheel.map(v=>v[key]))-Math.min(...q.wheel.map(v=>v[key]));
-                return {phases:Object.keys(q.phases),duration:q.frames.at(-1)-q.frames[0],fps:1000*(q.frames.length-1)/(q.frames.at(-1)-q.frames[0]),
+                return {phases:Object.keys(q.phases),posterMs:q.visibleStart-q.start,duration:q.frames.at(-1)-q.visibleStart,fps:1000*(q.frames.length-1)/(q.frames.at(-1)-q.frames[0]),
                   p95:sorted[Math.floor(sorted.length*.95)],max:Math.max(...dt),over50:dt.filter(v=>v>50).length,longFrames:dt.map((ms,i)=>({ms,phase:q.phaseFrames[i+1]})).filter(v=>v.ms>50),
                   holdMs:span('hold'),wheelDiameterChange:range('diameter'),wheelXChange:range('x'),wheelYChange:range('y'),
                   holdStable:q.hold.every(v=>v.tilt===q.hold[0].tilt&&v.lcd==='1')};})()

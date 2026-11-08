@@ -14,16 +14,20 @@ export function createStartupRenderer(renderer,{model,floor,atmosphere}){
         #include <colorspace_fragment>
       }`});
   const quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),material),scene=new THREE.Scene(),camera=new THREE.Camera();scene.add(quad);
-  const size=new THREE.Vector2();let disposed=false;
+  const size=new THREE.Vector2();let disposed=false,warming=null,released=false;
+  function release(){if(released)return;released=true;target.dispose();quad.geometry.dispose();material.dispose();}
   return {
-    async warm(source,sourceCamera){
+    warm(source,sourceCamera){
       if(disposed)return;
+      if(warming)return warming;
       // Compile both the HDR scene and final screen programs before timing.
-      const previous=renderer.getRenderTarget();renderer.setRenderTarget(target);
+      warming=(async()=>{const previous=renderer.getRenderTarget();renderer.setRenderTarget(target);
       const compiling=renderer.compileAsync(source,sourceCamera);renderer.setRenderTarget(previous);
       await compiling;
       if(!disposed)await renderer.compileAsync(scene,camera);
-      await renderer.compileAsync(source,sourceCamera);
+      if(!disposed)await renderer.compileAsync(source,sourceCamera);
+      })().finally(()=>{warming=null;if(disposed)release();});
+      return warming;
     },
     render(source,sourceCamera,frame,view){
       if(disposed)return;
@@ -44,6 +48,6 @@ export function createStartupRenderer(renderer,{model,floor,atmosphere}){
         renderer.setRenderTarget(previousTarget);renderer.autoClear=autoClear;renderer.info.autoReset=autoReset;
       }
     },
-    dispose(){if(disposed)return;disposed=true;target.dispose();quad.geometry.dispose();material.dispose();}
+    dispose(){if(disposed)return;disposed=true;if(!warming)release();else warming.finally(release).catch(()=>{});}
   };
 }

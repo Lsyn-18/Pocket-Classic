@@ -44,4 +44,5 @@ class MusicSessionStore(context: Context) {
     var theme: String get()=prefs.getString("theme","auto").takeIf { it in setOf("auto","light","dark") } ?: "auto";set(value) { require(value in setOf("auto","light","dark"));prefs.edit().putString("theme",value).apply() }
     var largeText: Boolean get()=prefs.getBoolean("largeText",false);set(value) { prefs.edit().putBoolean("largeText",value).apply() }
     var reducedMotion: Boolean get()=prefs.getBoolean("reducedMotion",false);set(value) { prefs.edit().putBoolean("reducedMotion",value).apply() }
+    var posterVersion: String get()=prefs.getString("posterVersion","")?:"";set(value) { prefs.edit().putString("posterVersion",value).apply() }
 }

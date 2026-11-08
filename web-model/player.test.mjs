@@ -41,6 +41,7 @@ test('local library keeps previously imported downloads playable without a cloud
   const {app,nativeCalls}=fixture({status:()=>({error:'offline'}),local:()=>({tracks,permissionGranted:false})},{},true);await flush();assert.equal(app.state.connected,false);assert.equal(app.state.problem,null);
   await app.select();assert.equal(app.entries().some(e=>e.id==='netease'),false);await choose(app,'手机本地音乐');assert.deepEqual(Array.from(app.entries().slice(3),t=>t.id),[-1,-2]);
   app.state.selected=4;await app.select();assert.equal(app.state.queueMode,'local');assert.equal(nativeCalls.at(-1).mode,'local');assert.equal(nativeCalls.at(-1).index,1);assert.deepEqual(Array.from(nativeCalls.at(-1).tracks,t=>t.id),[-1,-2]);
+  assert.equal(app.state.feedbackLevel,'state');assert.equal(app.state.feedback,'换曲');
   app.action('menu');app.state.selected=1;await app.select();assert.equal(nativeCalls.at(-1).category,'device');assert.equal(nativeCalls.some(c=>c.method==='login'),false);
 });
 
@@ -48,6 +49,21 @@ test('top icon offers pause during playback and play when paused',async()=>{
   const {app,elements,listeners}=fixture();app.state.current=song(9);app.audio.paused=false;app.render();assert.match(elements.get('playIndicator').innerHTML,/M2 1H5/);
   app.audio.paused=true;listeners.get('audio:pause')();assert.match(elements.get('playIndicator').innerHTML,/M2 0 11/);assert.equal(elements.get('playIndicator').style.display,'block');
   app.state.current=null;app.render();assert.equal(elements.get('playIndicator').style.display,'none');
+});
+
+test('feedback levels restore the battery, protect warnings and expose keyboard dismissal',()=>{
+  const timers=new Map();let id=0;
+  const {app,elements,listeners}=fixture({}, {setTimeout:(fn,ms)=>(timers.set(++id,{fn,ms}),id),clearTimeout:key=>timers.delete(key)});
+  app.feedback('VOL 62','state');assert.equal(app.state.feedbackLevel,'state');assert.equal([...timers.values()].at(-1).ms,1600);assert.equal(elements.get('feedbackDismiss').hidden,true);
+  [...timers.values()].at(-1).fn();assert.equal(app.state.feedback,'');
+  app.feedback('已导入');assert.equal([...timers.values()].at(-1).ms,1200);
+  app.feedback('按键已锁定','warning');assert.equal([...timers.values()].at(-1).ms,2400);assert.equal(elements.get('feedbackDismiss').hidden,false);
+  app.feedback('VOL 50','state');assert.equal(app.state.feedback,'按键已锁定');
+  let stopped=false;listeners.get('feedbackDismiss:keydown')({key:'Escape',preventDefault(){},stopPropagation(){stopped=true;}});
+  assert.equal(stopped,true);assert.equal(app.state.feedback,'');assert.equal(elements.get('feedbackDismiss').hidden,true);assert.equal(timers.size,0);
+});
+test('native Back dismisses a warning before navigating or exiting',()=>{
+  const {app}=fixture({}, {},true);app.feedback('按键已锁定','warning');app.native.back();assert.equal(app.state.feedback,'');assert.equal(app.state.page,'home');
 });
 test('music menu contains playlists, daily recommendations, private roaming and followed artists',async()=>{
   const {app}=fixture();await app.select();assert.equal(app.state.page,'music');assert.deepEqual(Array.from(app.entries(),x=>x.name),['喜欢的音乐','我的歌单','手机本地音乐','每日推荐','私人漫游','关注的歌手']);

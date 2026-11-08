@@ -1,12 +1,12 @@
 import {createOpeningPlayback,sampleOpening,smooth} from './startup.mjs';
 
-export function createStartupView({app,host,canvas,lcd,dimensions,baseline,onFinish}){
+export function createStartupView({app,host,canvas,lcd,dimensions,baseline,poster,onFinish}){
   const playback=createOpeningPlayback(),body=document.body,reduced=matchMedia('(prefers-reduced-motion: reduce)');
   const layer=document.createElement('div');layer.className='startup-rings';layer.setAttribute('aria-hidden','true');
   const outer=document.createElement('i'),inner=document.createElement('i');layer.append(outer,inner);host.append(layer);
   const skip=document.createElement('button');skip.type='button';skip.className='startup-skip';skip.textContent='跳过开场';body.append(skip);
   body.classList.add('startup-playing');host.dataset.opening='preparing';
-  const blocked=[...document.querySelectorAll('#playerTools,.model-hit-controls,header,.intro,.notes,footer')];
+  const blocked=[...document.querySelectorAll('#playerTools,.model-hit-controls,.feedback-controls,header,.intro,.notes,footer')];
   const inert=blocked.map(element=>element.inert);blocked.forEach(element=>{element.inert=true;});
   const previousBack=app.native?.back;
   let cleaned=false;
@@ -43,8 +43,9 @@ export function createStartupView({app,host,canvas,lcd,dimensions,baseline,onFin
   const unsubscribe=app.native?.motion.onVisibility(visible=>{if(!visible)finish('background');});
   if(app.native)app.native.back=()=>finish('skip');
   // Failure to receive preferences must never trap the player behind an intro.
-  const deadline=setTimeout(()=>finish('timeout'),8000);
-  Promise.resolve(app.native?.ready).then(snapshot=>{
+  const deadline=setTimeout(()=>finish('timeout'),12000);
+  const ready=poster?Promise.all([Promise.resolve(app.native?.ready),poster.finished]).then(([snapshot])=>snapshot):Promise.resolve(app.native?.ready);
+  ready.then(snapshot=>{
     if(baseline||snapshot?.opening===false)finish('restored');
     else if(reduced.matches||app.state.reducedMotion)finish('reduced-motion');
     else if(document.hidden)finish('background');

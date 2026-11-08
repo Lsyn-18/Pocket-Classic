@@ -14,7 +14,7 @@ let queueEpoch=0,roamFill=null,roamNext=null,nativeInitialized=false;
 Object.assign(state,{artists:[],artistOffset:0,artistMore:false,artistId:0,tracksMore:false,tracksOffset:0,quality:'standard',localTracks:[],localPermission:false});
 if(!native)try{state.quality=qualityValue(window.localStorage?.getItem('pocketclassic.quality'))}catch{}
 const roamStream=createRoamStream(()=>api('roam'));
-Object.assign(state,{theme:'auto',largeText:false,reducedMotion:false,reader:false,buffering:false,actualQuality:'',problem:null,feedback:'',seeking:0});
+Object.assign(state,{theme:'auto',largeText:false,reducedMotion:false,reader:false,buffering:false,actualQuality:'',problem:null,feedback:'',feedbackLevel:'hint',feedbackAt:0,seeking:0});
 if(!native)try{const saved=JSON.parse(window.localStorage?.getItem('pocketclassic.appearance')||'{}');for(const key of ['dark','largeText','reducedMotion'])if(typeof saved[key]==='boolean')state[key]=saved[key];if(['auto','light','dark'].includes(saved.theme))state.theme=saved.theme;}catch{}
 const systemTheme=typeof matchMedia==='function'?matchMedia('(prefers-color-scheme: dark)'):null;
 systemTheme?.addEventListener('change',()=>render());
@@ -22,14 +22,24 @@ const home=['音乐','正在播放','随机播放歌曲','设置'];
 const music=[{id:'liked',name:'喜欢的音乐',sub:'网易云红心歌曲'},{id:'playlists',name:'我的歌单',sub:'创建与收藏的歌单'},{id:'device',name:'手机本地音乐',sub:'扫描手机音频 · 离线播放'},{id:'daily',name:'每日推荐',sub:'今天为你推荐的歌曲'},{id:'roam',name:'私人漫游',sub:'私人 FM · 连续发现音乐'},{id:'artists',name:'关注的歌手',sub:'网易云收藏 / 订阅的歌手'}];
 function updatePlayIndicator(){const glyph=playbackGlyph(state.current,audio.paused),icon=$('playIndicator');icon.style.display=glyph?'block':'none';icon.innerHTML=glyph==='pause'?'<path fill="currentColor" d="M2 1H5V11H2ZM7 1H10V11H7Z"/>':'<path fill="currentColor" d="M2 0 11 6 2 12Z"/>';icon.setAttribute('aria-label',glyph==='pause'?'暂停':'播放');}
 let retryAction=null,feedbackTimer,lastAppearance='';
-function clearNotice(){state.problem=null;state.noticeError=false;}
-function feedback(message){state.feedback=message;$('uiAnnouncement').textContent=message;clearTimeout(feedbackTimer);feedbackTimer=setTimeout(()=>{state.feedback='';},1800);}
+function clearNotice(){state.problem=null;state.noticeError=false;if(state.feedbackLevel==='warning')dismissFeedback();}
+function dismissFeedback(){clearTimeout(feedbackTimer);state.feedback='';const button=$('feedbackDismiss');button.hidden=true;if(document.activeElement===button)$('modelViewport')?.focus?.({preventScroll:true});}
+function feedback(message,level='hint',announce=true){
+ if(state.feedback&&state.feedbackLevel==='warning'&&level!=='warning')return;
+ clearTimeout(feedbackTimer);state.feedback=message;state.feedbackLevel=level;state.feedbackAt=Date.now();
+ $('feedbackDismiss').hidden=level!=='warning';if(announce)$('uiAnnouncement').textContent=message;
+ feedbackTimer=setTimeout(dismissFeedback,level==='state'?1600:level==='warning'?2400:1200);
+}
+$('feedbackDismiss').onclick=dismissFeedback;
+$('feedbackDismiss').addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();event.stopPropagation();dismissFeedback();}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden)dismissFeedback();});
+native?.motion.onVisibility(visible=>{if(!visible)dismissFeedback();});
 function persistAppearance(){if(!native)try{const value=JSON.stringify({dark:state.dark,theme:state.theme,largeText:state.largeText,reducedMotion:state.reducedMotion});if(value!==lastAppearance){window.localStorage?.setItem('pocketclassic.appearance',value);lastAppearance=value;}}catch{}}
 const escapeText=t=>String(t??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const format=seconds=>{const s=Math.floor(Math.max(0,Number(seconds)||0));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')};
 function tick(){if(!state.haptics)return;if(native)native.vibrate();else if(navigator.vibrate)navigator.vibrate(5)}
 async function api(route,body){if(native)return native.api(route);const response=await fetch('/api/'+route,{cache:'no-store',...(body!==undefined?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{})});const result=await response.json();if(!response.ok)throw Error(result.error||'音乐服务暂不可用');return result}
-function footer(message,error=false){if(error){state.noticeError=true;state.problem={message,login:/登录|授权|连接网易云/.test(message)};renderReader();}else if(message){clearNotice();}const value=state.problem?.message||message||(state.connected?'MENU 返回 · 长按中央键打开队列':'转轮浏览 · 屏幕也可点选');$('lcdFooter').textContent=value;$('lcdFooter').classList.toggle('error',state.noticeError);if(error)$('uiAnnouncement').textContent=message;}
+function footer(message,error=false){if(error){const fresh=state.problem?.message!==message;state.noticeError=true;state.problem={message,login:/登录|授权|连接网易云/.test(message)};renderReader();if(fresh)feedback(message,'warning');}else if(message){clearNotice();feedback(message);}const value=state.problem?.message||message||(state.connected?'MENU 返回 · 长按中央键打开队列':'转轮浏览 · 屏幕也可点选');$('lcdFooter').textContent=value;$('lcdFooter').classList.toggle('error',state.noticeError);}
 function album(track,small=false){const colors=[['#304f48','#a1b49b'],['#94674f','#dcc09d'],['#3a526b','#aabdc9']][Math.abs(Number(track?.id)||0)%3],url=coverUrl(track?.cover);return '<div class="album'+(url?' has-cover':'')+'" style="background:linear-gradient(135deg,'+colors.join(',')+')'+(small?';width:62px;height:62px;min-width:62px':'')+'">'+(url&&!native?'<img src="'+escapeText(url)+'" alt="专辑封面" referrerpolicy="no-referrer">':'<i class="shine"></i>')+'</div>'}
 function row(label,index,sub,item={}){return '<button class="row'+(index===state.selected?' active':'')+(sub!==undefined?' with-sub':'')+'" data-index="'+index+'" aria-current="'+(index===state.selected)+'"><span class="text"><strong class="label">'+escapeText(label)+'</strong>'+(sub!==undefined?'<small>'+escapeText(sub)+'</small>':'')+'</span><span class="arrow" aria-hidden="true">'+menuMarker(state.page,item,index,state)+'</span></button>'}
 function entries(){
@@ -63,7 +73,7 @@ function openQueue(){if(!state.queue.length){feedback('先选择一首歌，队�
 function openReader(){renderReader(true);state.reader=true;$('readerDialog').showModal();}
 function openHelp(){stopSeeking();const dialog=$('helpDialog');dialog.showModal();dialog.scrollTop=0;$('helpTitle').focus?.({preventScroll:true});}
 async function retryProblem(){const login=state.problem?.login;clearNotice();render();if(login)return openLogin();if(retryAction)return retryAction();if(state.current)return playAt(state.queueIndex);return updateAccount().catch(e=>footer(e.message,true));}
-function screenAction(name){if(name==='retry')return retryProblem();if(name==='back')return menu();if(name==='next')return next();if(name==='queue')return openQueue();if(name==='details')return openReader();if(name==='mode'){state.mode=state.mode==='seek'?'volume':'seek';feedback(state.mode==='seek'?'正在调整播放进度':'正在调整音量');render();}}
+function screenAction(name){if(name==='dismiss')return dismissFeedback();if(name==='retry')return retryProblem();if(name==='back')return menu();if(name==='next')return next();if(name==='queue')return openQueue();if(name==='details')return openReader();if(name==='mode'){state.mode=state.mode==='seek'?'volume':'seek';feedback(state.mode==='seek'?format(audio.currentTime):'VOL '+Math.round(audio.volume*100),'state');render();}}
 function updateProgress(){if(state.page!=='playing'||!state.current)return;const duration=Number.isFinite(audio.duration)?audio.duration:state.current.durationMs/1000;const progress=$('progressFill');if(progress)progress.style.width=Math.min(100,audio.currentTime/Math.max(duration,1)*100)+'%';if($('elapsed'))$('elapsed').textContent=format(audio.currentTime);if($('remaining'))$('remaining').textContent='−'+format(duration-audio.currentTime);if($('volumeFill'))$('volumeFill').style.width=Math.round(audio.volume*100)+'%';if($('volumeText'))$('volumeText').textContent=Math.round(audio.volume*100)+'%';if($('caption'))$('caption').textContent=state.trial?'试听片段':state.mode==='seek'?'转动转轮调整进度':'转动转轮调整音量'}
 function navigate(page,title){clearNotice();state.history.push({page:state.page,title:state.title,selected:state.selected});state.page=page;state.title=title;state.selected=0;state.mode='volume';render()}
 async function load(page,title,fn){const epoch=++requestEpoch;navigate(page,title);retryAction=()=>{menu();return load(page,title,fn);};if(page==='tracks'){state.tracks=[];state.tracksMore=false;state.tracksOffset=0}if(page==='artists'){state.artists=[];state.artistMore=false;state.artistOffset=0}state.busy=true;render();try{const result=await fn();if(epoch===requestEpoch){Object.assign(state,result);state.busy=false;render();if(page==='tracks'&&!state.tracks.length)footer('暂无歌曲，按 MENU 返回后重试');if(page==='artists'&&!state.artists.length)footer('暂无关注歌手，可先在网易云收藏歌手')}}catch(e){if(epoch===requestEpoch){state.busy=false;render();footer(e.message,true)}}}
@@ -108,7 +118,7 @@ async function playAt(index,queue=state.queue,mode=state.queueMode){if(!queue[in
  const epoch=++playEpoch;audio.pause();audio.removeAttribute('src');audio.load();state.queue=queue;state.queueMode=mode;state.queueIndex=index;state.current=queue[index];state.trial=false;lastPlayError='';
  const title=mode==='roam'?'私人漫游':'正在播放';if(state.page!=='playing')navigate('playing',title);else state.title=title;
  render();footer('正在获取播放资源…');
- try{if(native){await native.playQueue(queue,index,mode,{shuffle:state.shuffle,repeat:state.repeat,volume:audio.volume,quality:state.quality});if(epoch!==playEpoch)return;render();footer();return;}const r=await api('resolve',{id:state.current.id,quality:state.quality});if(epoch!==playEpoch)return;if(!r.url)throw Error('账号或版权限制，暂无音源，请试试下一首');state.trial=!!r.trial;state.actualQuality=r.level||'';audio.src=r.url;audio.load();await audio.play();if(epoch!==playEpoch)return;state.buffering=false;render();footer(state.trial?'当前账号仅可试听':null);if(mode==='roam')refillRoam()}
+ try{if(native){await native.playQueue(queue,index,mode,{shuffle:state.shuffle,repeat:state.repeat,volume:audio.volume,quality:state.quality});if(epoch!==playEpoch)return;render();footer();feedback('换曲','state');return;}const r=await api('resolve',{id:state.current.id,quality:state.quality});if(epoch!==playEpoch)return;if(!r.url)throw Error('账号或版权限制，暂无音源，请试试下一首');state.trial=!!r.trial;state.actualQuality=r.level||'';audio.src=r.url;audio.load();await audio.play();if(epoch!==playEpoch)return;state.buffering=false;render();footer(state.trial?'当前账号仅可试听':null);feedback('换曲','state');if(mode==='roam')refillRoam()}
  catch(e){if(epoch===playEpoch){state.buffering=false;lastPlayError=e.message;footer(e.message,true)}}
 }
 function refillRoam(){
@@ -123,16 +133,16 @@ function refillRoam(){
  }catch(e){if(epoch===queueEpoch&&state.queueMode==='roam'&&state.page==='playing')footer('漫游续歌暂不可用，按下一首重试',true);return false}})();
  roamFill=task;task.finally(()=>{if(roamFill===task)roamFill=null});return task;
 }
-function menu(home=false){if(state.hold){feedback('按键已锁定 · 拨动顶部开关解锁');return;}clearNotice();if(state.sleep){state.sleep=false;render();return}++requestEpoch;state.busy=false;if(home||!state.history.length){state.page='home';state.title='iPod';state.selected=0;state.history=[]}else Object.assign(state,state.history.pop());render()}
-function rotate(delta){if(state.hold||state.busy)return;if(state.sleep){state.sleep=false;render();return}if(state.page==='playing'){tick();if(state.mode==='seek')seek(delta*3);else audio.volume=Math.max(0,Math.min(1,audio.volume+delta*Math.max(.04,audio.volumeStep||0)));updateProgress()}else{const selected=Math.max(0,Math.min(entries().length-1,state.selected+delta));if(selected!==state.selected){state.selected=selected;tick();render()}}}
-function seek(seconds){if(state.current&&Number.isFinite(audio.duration)){audio.currentTime=Math.max(0,Math.min(audio.duration,audio.currentTime+seconds));updateProgress()}}
+function menu(home=false){if(state.hold){feedback('按键已锁定 · 拨动顶部开关解锁','warning');return;}clearNotice();if(state.sleep){state.sleep=false;render();return}++requestEpoch;state.busy=false;if(home||!state.history.length){state.page='home';state.title='iPod';state.selected=0;state.history=[]}else Object.assign(state,state.history.pop());render()}
+function rotate(delta){if(state.hold||state.busy)return;if(state.sleep){state.sleep=false;render();return}if(state.page==='playing'){tick();if(state.mode==='seek')seek(delta*3);else{audio.volume=Math.max(0,Math.min(1,audio.volume+delta*Math.max(.04,audio.volumeStep||0)));feedback('VOL '+Math.round(audio.volume*100),'state');}updateProgress()}else{const selected=Math.max(0,Math.min(entries().length-1,state.selected+delta));if(selected!==state.selected){state.selected=selected;tick();render()}}}
+function seek(seconds){if(state.current&&Number.isFinite(audio.duration)){audio.currentTime=Math.max(0,Math.min(audio.duration,audio.currentTime+seconds));feedback(format(audio.currentTime),'state');updateProgress()}}
 let seekingTimer=null;
-function stopSeeking(){clearInterval(seekingTimer);seekingTimer=null;if(state.seeking){state.seeking=0;audio.endSeek?.();state.feedback='';}}
+function stopSeeking(){clearInterval(seekingTimer);seekingTimer=null;if(state.seeking){state.seeking=0;audio.endSeek?.();feedback(format(audio.currentTime),'state');}}
 function startSeeking(direction){
  if(state.seeking===direction)return;
  stopSeeking();if(!state.current||!Number.isFinite(audio.duration)||audio.duration<=0||state.buffering)return;
  const track=state.current.id,start=Date.now();let previous=start;state.seeking=direction;audio.beginSeek?.();
- const advance=()=>{if(state.hold||state.sleep||state.current?.id!==track){stopSeeking();return;}const now=Date.now(),dt=Math.min(.25,(now-previous)/1000);previous=now;const speed=now-start>1800?24:10;const target=Math.max(0,Math.min(Math.max(0,audio.duration-.25),audio.currentTime+direction*speed*dt));if(target!==audio.currentTime)audio.currentTime=target;updateProgress();};
+ const advance=()=>{if(state.hold||state.sleep||state.current?.id!==track){stopSeeking();return;}const now=Date.now(),dt=Math.min(.25,(now-previous)/1000);previous=now;const speed=now-start>1800?24:10;const target=Math.max(0,Math.min(Math.max(0,audio.duration-.25),audio.currentTime+direction*speed*dt));if(target!==audio.currentTime)audio.currentTime=target;feedback(format(audio.currentTime),'state',false);updateProgress();};
  seekingTimer=setInterval(advance,120);
 }
 async function toggle(){if(state.sleep){state.sleep=false;render();return}if(state.busy)return;if(state.page==='tracks')return select();if(!state.current){footer('先从音乐菜单选择一首歌');return}if(lastPlayError)return playAt(state.queueIndex);try{if(audio.paused)await audio.play();else audio.pause()}catch(e){footer('播放失败，请重新选择歌曲',true)}}
@@ -147,7 +157,7 @@ async function next(){if(state.busy||!state.queue.length)return;
  let index=state.queueIndex+1;if(state.shuffle&&state.queue.length>1){do{index=Math.floor(Math.random()*state.queue.length)}while(index===state.queueIndex)}if(index>=state.queue.length){if(state.repeat===2)index=0;else return}return playAt(index)
 }
 function previous(){if(native){clearNotice();return native.previous().catch(e=>footer(e.message,true));}if(audio.currentTime>3){audio.currentTime=0;return}if(state.queueIndex>0)playAt(state.queueIndex-1);else if(state.current)audio.currentTime=0}
-function action(name,long=false){if(state.hold){stopSeeking();feedback('按键已锁定 · 拨动顶部开关解锁');return;}if(state.sleep){state.sleep=false;render();return}if(long){if(name==='menu')return menu(true);if(name==='play'){stopSeeking();audio.pause();state.sleep=true;render();return}if(name==='previous')return startSeeking(-1);if(name==='next')return startSeeking(1);if(name==='select')return openQueue();}else{stopSeeking();if(name==='select')return select();tick();if(name==='menu')return menu();if(name==='play')return toggle();if(name==='previous')return previous();if(name==='next')return next()}}
+function action(name,long=false){if(state.hold){stopSeeking();feedback('按键已锁定 · 拨动顶部开关解锁','warning');return;}if(state.sleep){state.sleep=false;render();return}if(long){if(name==='menu')return menu(true);if(name==='play'){stopSeeking();audio.pause();state.sleep=true;render();return}if(name==='previous')return startSeeking(-1);if(name==='next')return startSeeking(1);if(name==='select')return openQueue();}else{stopSeeking();if(name==='select')return select();tick();if(name==='menu')return menu();if(name==='play')return toggle();if(name==='previous')return previous();if(name==='next')return next()}}
 let gesture=null;
 const wheelPress=createButtonPress({shortPress:action,longPress:name=>action(name,true),stop:stopSeeking});
 const cancelWheel=()=>{gesture=null;wheelPress.cancel();};
@@ -175,21 +185,24 @@ $('closeReader').onclick=()=>{state.reader=false;$('readerDialog').close();};$('
 if(native)native.onBattery(updateBattery);
 else if(navigator.getBattery)navigator.getBattery().then(b=>{const update=()=>updateBattery(b);update();b.addEventListener('levelchange',update);b.addEventListener('chargingchange',update)}).catch(()=>{});
 render();
+let lastFeedbackVolume=audio.volume;
+audio.addEventListener('volumechange',()=>{const changed=audio.volume!==lastFeedbackVolume;lastFeedbackVolume=audio.volume;if(changed&&(!native||nativeInitialized))feedback('VOL '+Math.round(audio.volume*100),'state');});
 if(native){
  native.onConnection(()=>{++requestEpoch;state.busy=false;state.tracks=[];state.tracksMore=false;state.playlists=[];state.artists=[];state.artistMore=false;menu(true);updateAccount().catch(e=>footer(e.message,true));});
  native.onPlayback(value=>{
    if(state.busy)return;
-   const changed=state.current?.id!==value.current?.id||state.queueIndex!==value.index||state.queue.length!==value.count;
+   const trackChanged=state.current?.id!==value.current?.id;
+   const changed=trackChanged||state.queueIndex!==value.index||state.queue.length!==value.count;
    const statusChanged=state.buffering!==!!value.buffering||state.actualQuality!==(value.actualQuality||'');
    if(value.tracks)state.queue=value.tracks;state.queueIndex=value.index||0;state.current=value.current||null;state.queueMode=value.mode||'playlist';state.shuffle=!!value.shuffle;state.repeat=value.repeat||0;
    state.buffering=!!value.buffering;state.actualQuality=value.actualQuality||'';
    if(!nativeInitialized){state.dark=!!value.dark;state.haptics=value.haptics!==false;state.quality=qualityValue(value.quality);state.theme=['auto','light','dark'].includes(value.theme)?value.theme:'auto';state.largeText=!!value.largeText;state.reducedMotion=!!value.reducedMotion;if(state.current)navigate('playing',state.queueMode==='roam'?'私人漫游':'正在播放');nativeInitialized=true;render();}
    state.trial=value.mode!=='local'&&!!state.current&&value.durationMs>0&&value.durationMs+2000<state.current.durationMs;
-   if(changed){stopSeeking();lastPlayError='';clearNotice();if(state.page==='playing')state.title=state.queueMode==='roam'?'私人漫游':'正在播放';render();}
+   if(changed){stopSeeking();lastPlayError='';clearNotice();if(state.page==='playing')state.title=state.queueMode==='roam'?'私人漫游':'正在播放';render();if(trackChanged&&state.current)feedback('换曲','state');}
    if(statusChanged)renderReader();
    if(value.error){lastPlayError=value.error;footer(value.error,true);}else updateProgress();
  });
  native.ready.then(()=>updateAccount().catch(()=>{state.connected=false;render();footer('网易云暂不可用 · 已下载和本地音乐仍可离线播放');})).catch(e=>footer(e.message,true));
- native.back=()=>{const dialog=Array.from(document.querySelectorAll('dialog[open]')).at(-1);if(dialog){dialog.close();return;}if(document.body.classList.contains('options-open')){$('playerOptionsToggle').click();return;}if(state.page!=='home')menu();else native.request('finish');};
+ native.back=()=>{const dialog=Array.from(document.querySelectorAll('dialog[open]')).at(-1);if(dialog){dialog.close();return;}if(state.feedback&&state.feedbackLevel==='warning'){dismissFeedback();return;}if(document.body.classList.contains('options-open')){$('playerOptionsToggle').click();return;}if(state.page!=='home')menu();else native.request('finish');};
 }else if(location.protocol!=='file:')updateAccount().catch(e=>footer('离线预览 · 连接本机音乐服务后可听歌'));
 window.PocketClassicContext={state,audio,native,entries,format,action,stopSeeking,rotate,select,render,screenAction,openReader,openHelp,feedback,openAppearance:()=>navigate('appearance','显示与动态效果'),footerText:()=>$('lcdFooter').textContent};

@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import {createClassic,dimensions} from './geometry.mjs';
 import {makeScreen} from './screen.mjs';
 import {screenQuality} from './visual-profile.mjs';
-import {createAtmosphere,trackAccent} from './atmosphere.mjs';
+import {createAtmosphere,trackAccent,trackLight} from './atmosphere.mjs';
+import {createStudioFloor} from './studio-floor.mjs';
 import {menuMarker,appearanceIsDark,canAdvance} from './presentation.mjs';
 
 function canvas(){
@@ -37,10 +38,10 @@ test('list hit targets exclude blank rows and remain aligned in large-text mode'
 });
 
 test('LCD errors and playback expose actions rather than stale list hit targets',()=>{
-  const state={page:'tracks',selected:0,problem:{message:'网络暂时不可用'},current:null};
+  const state={page:'tracks',selected:0,problem:{message:'网络暂时不可用'},feedback:'网络暂时不可用',feedbackLevel:'warning',feedbackAt:Date.now(),current:null};
   const app={state,audio:{paused:true,currentTime:0,volume:.5},entries:()=>[{name:'旧歌曲'}],footerText:()=>''};
-  const screen=makeScreen(app);assert.equal(screen.hit(30,174),'retry');assert.equal(screen.hit(175,174),'back');assert.equal(screen.hit(10,30),null);
-  Object.assign(state,{page:'playing',problem:null,current:{id:1,name:'当前歌曲'},queue:[{id:1}],queueIndex:0});app.format=()=> '0:00';screen.draw(true);
+  const screen=makeScreen(app);assert.equal(screen.hit(30,114),'retry');assert.equal(screen.hit(175,114),'back');assert.equal(screen.hit(270,115),'dismiss');assert.equal(screen.hit(10,60),'dismiss');assert.equal(screen.hit(10,232),'retry');
+  Object.assign(state,{page:'playing',problem:null,feedback:'',current:{id:1,name:'当前歌曲'},queue:[{id:1}],queueIndex:0});app.format=()=> '0:00';screen.draw(true);
   assert.equal(screen.hit(260,207),'queue');assert.equal(screen.hit(130,160),'mode');assert.equal(screen.hit(120,70),'details');screen.dispose();
 });
 
@@ -51,10 +52,11 @@ test('markers distinguish navigation, playing tracks, quality and boolean settin
 });
 
 test('a failed final song offers return instead of an unavailable next action',()=>{
-  const state={page:'playing',current:{id:1,name:'最后一首'},queue:[{id:1}],queueIndex:0,problem:{message:'暂不可播放'}};
+  const state={page:'playing',current:{id:1,name:'最后一首'},queue:[{id:1}],queueIndex:0,problem:{message:'暂不可播放'},feedback:'暂不可播放',feedbackLevel:'warning',feedbackAt:Date.now()};
   const app={state,audio:{paused:true,currentTime:0,volume:.5},entries:()=>[],format:()=> '0:00',footerText:()=>''};const screen=makeScreen(app);
-  assert.equal(canAdvance(state),false);assert.equal(screen.hit(180,175),'back');
-  state.repeat=2;screen.draw(true);assert.equal(canAdvance(state),true);assert.equal(screen.hit(180,175),'next');screen.dispose();
+  assert.equal(canAdvance(state),false);assert.equal(screen.hit(180,115),'back');
+  state.repeat=2;screen.draw(true);assert.equal(canAdvance(state),true);assert.equal(screen.hit(180,115),'next');
+  state.feedback='';screen.draw(true);assert.equal(screen.hit(10,232),'retry');assert.equal(screen.hit(130,160),'mode');screen.dispose();
 });
 
 test('decorations stay outside picking and total model triangles stay within twenty percent',()=>{
@@ -129,8 +131,19 @@ test('the wheel well covers the opening so the chrome rear cannot flash through 
 
 test('reduced motion freezes particles and breathing; track accent is deterministic',()=>{
   const scene=new THREE.Scene(),camera=new THREE.OrthographicCamera(-4,4,6,-6,.1,60),atmosphere=createAtmosphere({scene,camera,native:true});
-  assert.equal(atmosphere.count,60);assert.equal(trackAccent(123).getHex(),trackAccent(123).getHex());
+  assert.equal(atmosphere.count,76);assert.equal(trackAccent(123).getHex(),trackAccent(123).getHex());
   atmosphere.update(.1,{trackId:123,playing:true});const particles=atmosphere.group.children[1],time=particles.material.uniforms.uTime.value;
   atmosphere.update(.1,{trackId:123,playing:true,reducedMotion:true});assert.equal(particles.visible,false);assert.equal(particles.material.uniforms.uTime.value,time);
   assert.equal(atmosphere.group.children[0].material.depthTest,true);atmosphere.dispose();assert.equal(scene.children.length,0);
+});
+
+test('studio light stays within two hue anchors and daylight temperature bounds',()=>{
+  for(const id of [0,1,2,20,345,-983]){const hsl=trackAccent(id).getHSL({}),light=trackLight(id);assert.ok(hsl.h*360>=200&&hsl.h*360<=215);assert.ok(Math.abs(hsl.s-.20)<1e-8);assert.ok(light.kelvin>=6200&&light.kelvin<=6800);}
+});
+
+test('floor updates retain soft reflection roughness and reuse textures across finishes',()=>{
+  const model=new THREE.Group(),source=new THREE.MeshStandardMaterial({roughness:.30});model.add(new THREE.Mesh(new THREE.PlaneGeometry(1,1),source));
+  const floor=createStudioFloor(model,-5),mirror=floor.group.children[0],material=mirror.children[0].material;
+  for(const dark of [false,true,false]){floor.update(dark,trackAccent(1));assert.equal(material.roughness,.74);assert.equal(material.opacity,.13);}
+  assert.equal(floor.group.children.length,6);floor.dispose();model.children[0].geometry.dispose();source.dispose();
 });

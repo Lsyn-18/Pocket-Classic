@@ -90,6 +90,16 @@ class VolumeSyncDeviceTest {
             Thread.sleep(350); assertTrue("Wheel did not reduce system volume",audio.getStreamVolume(stream)<expected); synced()
             step("The actual wheel action updates system media volume")
 
+            repeat(10) { index ->
+                js("window.PocketClassicContext.audio.volume=" + if(index%2==0) ".40" else ".44")
+                Thread.sleep(120); synced()
+                waitFor("window.PocketClassicContext.state.feedbackLevel==='state'&&window.PocketClassicContext.state.feedback==='VOL '+Math.round(window.PocketClassicContext.audio.volume*100)")
+                assertEquals("true",js("document.getElementById('feedbackDismiss').hidden"))
+            }
+            Thread.sleep(1800)
+            assertEquals("\"\"",js("window.PocketClassicContext.state.feedback"))
+            step("Ten volume adjustments use the header field, keep warning controls hidden and restore the battery after 1.6 seconds")
+
             val before = audio.getStreamVolume(stream)
             instrumentation.runOnMainSync { assertTrue("Phone app must own key focus",activity().hasWindowFocus()) }
             instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_VOLUME_DOWN); Thread.sleep(700)
