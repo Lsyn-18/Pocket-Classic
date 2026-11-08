@@ -16,19 +16,29 @@ class NetEaseApi(private val store: MusicSessionStore) {
     private var likedSession = ""
     private var likedAt = 0L
     private var likedIds = emptyList<Long>()
-    private fun request(path: String, data: JSONObject=JSONObject(), cookie: String=""): Response {
+    private data class PlaylistCache(val session: String,val id: Long,val name: String,val index: PlaylistTrackIndex<JSONObject>)
+    private var playlistCache: PlaylistCache? = null
+    private fun request(path: String, data: JSONObject=JSONObject(), cookie: String="",mobile: Boolean=false): Response {
         require(path.startsWith("/api/") && !path.contains('?') && !path.contains(".."))
         val cookies=linkedMapOf("os" to "pc","appver" to "3.1.17.204416","__remember_me" to "true","_ntes_nuid" to device)
         cookie.split(';').forEach { val parts=it.trim().split('=',limit=2);if(parts.size==2&&parts[0].matches(Regex("[A-Za-z0-9_]+")))cookies[parts[0]]=parts[1] }
+        if(mobile){
+            cookies["os"]="android";cookies["osver"]="14";cookies["appver"]="9.1.65";cookies["deviceId"]=device
+            cookies["buildver"]=(System.currentTimeMillis()/1000).toString()
+            cookies["requestId"]=System.currentTimeMillis().toString()+"_"+java.util.concurrent.ThreadLocalRandom.current().nextInt(1000).toString().padStart(4,'0')
+            val header=JSONObject().put("os","android").put("osver","14").put("appver","9.1.65").put("deviceId",device).put("buildver",cookies["buildver"]).put("versioncode","140").put("resolution","1920x1080").put("__csrf",cookies["__csrf"]?:"").put("requestId",cookies["requestId"])
+            for(key in listOf("MUSIC_U","MUSIC_A","NMTID"))cookies[key]?.let { header.put(key,it) }
+            data.put("header",header)
+        }
         data.put("e_r",false).put("csrf_token",cookies["__csrf"]?:"")
-        val encoded=NetEaseCrypto.encode(data.toString()).entries.joinToString("&") { URLEncoder.encode(it.key,"UTF-8")+"="+URLEncoder.encode(it.value,"UTF-8") }
-        val connection=URL("https://music.163.com/weapi/"+path.removePrefix("/api/")).openConnection() as HttpURLConnection
+        val encoded=(if(mobile)NetEaseCrypto.encodeEapi(path,data.toString()) else NetEaseCrypto.encode(data.toString())).entries.joinToString("&") { URLEncoder.encode(it.key,"UTF-8")+"="+URLEncoder.encode(it.value,"UTF-8") }
+        val connection=URL((if(mobile)"https://interface3.music.163.com/eapi/" else "https://music.163.com/weapi/")+path.removePrefix("/api/")).openConnection() as HttpURLConnection
         try {
             connection.requestMethod="POST";connection.doOutput=true;connection.instanceFollowRedirects=false
             connection.connectTimeout=12000;connection.readTimeout=20000
             connection.setRequestProperty("Content-Type","application/x-www-form-urlencoded")
             connection.setRequestProperty("Referer","https://music.163.com/")
-            connection.setRequestProperty("User-Agent","Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36")
+            connection.setRequestProperty("User-Agent",if(mobile)"NeteaseMusic/9.1.65 (Android 14)" else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36")
             connection.setRequestProperty("Cookie",cookies.entries.joinToString("; ") { it.key+"="+it.value })
             connection.outputStream.use { it.write(encoded.toByteArray(Charsets.UTF_8)) }
             if(connection.responseCode !in 200..299)throw IOException("网易云暂时无法连接（"+connection.responseCode+"），请检查手机网络")
@@ -75,6 +85,18 @@ class NetEaseApi(private val store: MusicSessionStore) {
         return JSONObject().put("authenticated",true).put("nickname",profile?.optString("nickname")?:session.nickname).put("message","网易云已登录，手机独立播放")
     }
     private fun ensureSession(session: MusicSession) { if(store.read()?.id!=session.id)throw IOException("账号已变化，请重新打开音乐菜单") }
+    private fun playlistGroup(session: MusicSession,group: String): List<JSONObject> {
+        val rows=mutableListOf<JSONObject>()
+        for(offset in 0 until 5000 step 100){
+            val data=JSONObject().put("userId",session.userId).put("limit",100).put("offset",offset).put("isWebview","true").put("includeRedHeart","true").put("includeTop","true")
+            val body=checked(request("/api/user/playlist/"+group,data,session.cookie,mobile=true))
+            ensureSession(session);val payload=body.optJSONObject("data")?:body
+            val list=payload.optJSONArray("playlist")?:throw IOException("网易云歌单顺序暂时无法读取，请稍后重试")
+            for(i in 0 until list.length())list.optJSONObject(i)?.let { item -> if(group=="collect")item.put("subscribed",true);rows.add(item) }
+            if(!hasMore(payload,offset,list.length(),100))return rows
+        }
+        throw IOException("歌单过多，暂时无法完整读取，请稍后重试")
+    }
     private fun normalize(list: JSONArray): JSONArray {
         val result=JSONArray();val seen=hashSetOf<Long>()
         for(i in 0 until list.length()) {
@@ -126,18 +148,35 @@ class NetEaseApi(private val store: MusicSessionStore) {
                 JSONObject().put("id",id).put("tracks",normalize(songs)).put("nextOffset",offset+songs.length()).put("more",hasMore(body,offset,songs.length(),100))
             }
             route=="playlists" -> {
-                val body=checked(request("/api/user/playlist",JSONObject().put("uid",session.userId).put("limit",100).put("offset",0).put("includeVideo",true),session.cookie))
-                val list=body.optJSONArray("playlist")?:JSONArray();val output=JSONArray()
-                for(i in 0 until list.length())list.optJSONObject(i)?.let {
-                    val owner = it.optLong("userId", it.optJSONObject("creator")?.optLong("userId") ?: 0L)
-                    if (!isOwnLikedPlaylist(it.optInt("specialType"), owner, session.userId)) output.put(JSONObject().put("id",it.optLong("id")).put("name",it.optString("name")).put("trackCount",it.optInt("trackCount")))
+                val created=playlistGroup(session,"create")
+                val collected=playlistGroup(session,"collect")
+                val output=JSONArray()
+                val rows=playlistGroupsInOrder(created,collected,{it.optLong("id")}) {
+                    val owner=it.optLong("userId",it.optJSONObject("creator")?.optLong("userId")?:0L)
+                    isOwnLikedPlaylist(it.optInt("specialType"),owner,session.userId)
                 }
-                JSONObject().put("playlists",output)
+                for(item in rows)output.put(JSONObject().put("id",item.optLong("id")).put("name",item.optString("name")).put("trackCount",item.optInt("trackCount")).put("subscribed",item.optBoolean("subscribed")))
+                JSONObject().put("playlists",output).put("orderSource","mobile")
             }
             route.startsWith("tracks?id=") -> {
-                val body=checked(request("/api/v6/playlist/detail",JSONObject().put("id",route.substringAfter('=').toLong()).put("n",100000).put("s",8),session.cookie))
-                val list=body.optJSONObject("playlist")?:throw IOException("歌单暂不可用")
-                JSONObject().put("id",list.optLong("id")).put("name",list.optString("name")).put("trackCount",list.optInt("trackCount")).put("tracks",normalize(list.optJSONArray("tracks")?:JSONArray()))
+                val id=route.substringAfter("id=").substringBefore('&').toLong()
+                val offset=if(route.contains("&offset="))route.substringAfter("&offset=").toInt() else 0
+                var cached=playlistCache
+                if(offset==0 || cached?.session!=session.id || cached.id!=id){
+                    val body=checked(request("/api/v6/playlist/detail",JSONObject().put("id",id).put("n",100000).put("s",8),session.cookie))
+                    val list=body.optJSONObject("playlist")?:throw IOException("歌单暂不可用")
+                    val songs=normalize(list.optJSONArray("tracks")?:JSONArray())
+                    val order=list.optJSONArray("trackIds")?.let { raw -> (0 until raw.length()).map { raw.optJSONObject(it)?.optLong("id") ?: raw.optLong(it) } }
+                    ensureSession(session)
+                    cached=PlaylistCache(session.id,id,list.optString("name"),PlaylistTrackIndex(order,List(songs.length()) { songs.getJSONObject(it) }) { it.getLong("id") })
+                    playlistCache=cached
+                }
+                val page=cached.index.page(offset) { ids ->
+                    val data=JSONObject().put("c",JSONArray(ids.map { JSONObject().put("id",it) }).toString())
+                    val songs=normalize(checked(request("/api/v3/song/detail",data,session.cookie)).optJSONArray("songs")?:JSONArray())
+                    ensureSession(session);List(songs.length()) { songs.getJSONObject(it) }
+                }
+                JSONObject().put("id",id).put("name",cached.name).put("trackCount",page.trackCount).put("tracks",JSONArray(page.tracks)).put("nextOffset",page.nextOffset).put("more",page.more)
             }
             else -> {
                 val daily=route=="daily";val path=if(daily)"/api/v3/discovery/recommend/songs" else "/api/v1/radio/get"

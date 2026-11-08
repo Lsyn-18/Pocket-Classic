@@ -12,9 +12,9 @@ class NativeContractTest {
         for (value in listOf("","../0.9.0","0.9.0-beta","0.9.1000")) assertFalse(NativeContract.validPosterVersion(value))
     }
     @Test fun musicRoutesAreWhitelisted() {
-        for (route in listOf("status", "playlists", "daily", "roam", "tracks?id=123456789", "artists?offset=0", "artist-tracks?id=123&offset=100")) assertTrue(NativeContract.allowedApi(route))
+        for (route in listOf("status", "playlists", "daily", "roam", "tracks?id=123456789", "tracks?id=88&offset=0", "tracks?id=88&offset=100", "artists?offset=0", "artist-tracks?id=123&offset=100")) assertTrue(NativeContract.allowedApi(route))
         for (route in listOf("resolve", "logout", "qr", "https://evil.example", "tracks?id=0", "tracks?id=1&cookie=x", "tracks?id=../1", "tracks?id=1/2")) assertFalse(NativeContract.allowedApi(route))
-        for (route in listOf("artists?offset=-1", "artists?offset=100000", "artists?offset=00", "artist-tracks?id=0&offset=0", "artist-tracks?id=1&offset=0&cookie=x")) assertFalse(NativeContract.allowedApi(route))
+        for (route in listOf("tracks?id=88&offset=-1", "tracks?id=88&offset=100000", "tracks?id=88&offset=00", "tracks?id=88&offset=1&cookie=x", "artists?offset=-1", "artists?offset=100000", "artists?offset=00", "artist-tracks?id=0&offset=0", "artist-tracks?id=1&offset=0&cookie=x")) assertFalse(NativeContract.allowedApi(route))
         assertTrue(NativeContract.validMode("artist"))
     }
     @Test fun musicQualityRestoresOnlySupportedLevels() {

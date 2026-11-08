@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const http = require('node:http');
 const { createGateway } = require('./gateway.cjs');
 test('only paired clients can read music; credentials and arbitrary upstream paths stay private', async t => {
-  const upstream = http.createServer((req, res) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ authenticated: true, nickname: 'test', cookie: 'DO-NOT-EXPORT', userId: 123, nested: { MUSIC_U: 'private', ok: true } })); });
+  const upstream = http.createServer((req, res) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ received:req.url,authenticated: true, nickname: 'test', cookie: 'DO-NOT-EXPORT', userId: 123, nested: { MUSIC_U: 'private', ok: true } })); });
   await new Promise(r => upstream.listen(0, '127.0.0.1', r));
   const { server, getCode } = createGateway({ upstream: `http://127.0.0.1:${upstream.address().port}`, port: 17865 });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -26,5 +26,7 @@ test('only paired clients can read music; credentials and arbitrary upstream pat
   }
   assert.equal((await fetch(url + '/api/qr', { method: 'POST', headers })).status, 404);
   assert.equal((await fetch(url + '/api/tracks?id=not-a-number', { headers })).status, 400);
+  const page=await (await fetch(url+'/api/tracks?id=88&offset=100',{headers})).json();assert.equal(page.received,'/api/tracks?id=88&offset=100');
+  for(const offset of ['-1','00','100000'])assert.equal((await fetch(url+'/api/tracks?id=88&offset='+offset,{headers})).status,400);
   assert.equal((await fetch(url + '/api/status', { headers: { ...headers, Origin: 'https://untrusted.example' } })).status, 403);
 });

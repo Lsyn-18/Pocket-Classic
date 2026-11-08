@@ -61,7 +61,7 @@ function createGateway({ upstream = 'http://127.0.0.1:17863', port = 17864, apkP
       if (!sessions.has(token)) return json(res, { error: '连接已失效，请使用电脑上的配对码重新连接' }, 401, origin);
       let route = url.pathname;
       if (route === '/api/liked') { const offset=url.searchParams.get('offset')??'0';if(!/^(0|[1-9][0-9]{0,4})$/.test(offset))return json(res,{error:'无效分页'},400,origin);route+='?offset='+offset; }
-      if (route === '/api/tracks') { const id = url.searchParams.get('id'); if (!/^\d+$/.test(id || '')) return json(res, { error: '无效歌单' }, 400, origin); route += '?id=' + id; }
+      if (route === '/api/tracks') { const id = url.searchParams.get('id'); if (!/^\d+$/.test(id || '')) return json(res, { error: '无效歌单' }, 400, origin); route += '?id=' + id;if(url.searchParams.has('offset')){const offset=url.searchParams.get('offset');if(!/^(0|[1-9][0-9]{0,4})$/.test(offset))return json(res,{error:'无效分页'},400,origin);route+='&offset='+offset;} }
       const body = req.method === 'POST' ? await readBody(req) : null;
       if (body && !/^\d+$/.test(String(body.id || ''))) return json(res, { error: '无效歌曲' }, 400, origin);
       const response = await fetch(upstream + route, { method: req.method, headers: { 'X-Local-Probe': '1', 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify({ id: body.id }) } : {}), signal: AbortSignal.timeout(28000) });

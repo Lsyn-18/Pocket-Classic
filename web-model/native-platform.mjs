@@ -5,7 +5,8 @@ export function createNativePlatform(transport, host = window) {
   function request(method,args={}) {
     const id=++sequence;
     return new Promise((resolve,reject)=>{
-      const timer=host.setTimeout(()=>{pending.delete(id);reject(Error('手机服务响应超时，请重试'));},['localScan','localImport','localFolder'].includes(method)?600000:45000);
+      const library=method==='api'&&(args.route==='playlists'||/^tracks\?id=/.test(args.route));
+      const timer=host.setTimeout(()=>{pending.delete(id);reject(Error('手机服务响应超时，请重试'));},['localScan','localImport','localFolder'].includes(method)?600000:library?120000:45000);
       pending.set(id,{resolve,reject,timer});
       try{const message=JSON.stringify({id,method,args});if(message.length>1_900_000)throw Error('歌单过大，请选择较小的歌单');transport.postMessage(message);}catch(error){host.clearTimeout(timer);pending.delete(id);reject(error);}
     });

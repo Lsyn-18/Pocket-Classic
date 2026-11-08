@@ -61,6 +61,7 @@ export function createHeadphones(model,D){
   const white=new THREE.MeshPhysicalMaterial({color:'#e9ecec',roughness:.28,metalness:0,clearcoat:.65,clearcoatRoughness:.24});
   const metal=new THREE.MeshStandardMaterial({color:'#d9dddf',roughness:.20,metalness:1});
   const rubber=new THREE.MeshStandardMaterial({color:'#e1e5e5',roughness:.64,metalness:0});
+  const cableMaterial=new THREE.MeshStandardMaterial({color:'#8f9da7',roughness:.72,metalness:0});
   const weave=speakerWeave(),grille=new THREE.MeshStandardMaterial({color:'#ffffff',map:weave,roughness:.88,metalness:.12});
   const print=new THREE.MeshBasicMaterial({color:'#a6afb4',toneMapped:false});
   // Rest on the metal rim, slightly above the coplanar dark socket interior.
@@ -109,7 +110,7 @@ export function createHeadphones(model,D){
     const radial=8,positions=new Float32Array((segments+1)*(radial+1)*3),normals=new Float32Array(positions.length),indices=[];
     for(let i=0;i<segments;i++)for(let j=0;j<radial;j++){const a=i*(radial+1)+j,b=a+radial+1;indices.push(a,a+1,b,a+1,b+1,b);}
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3).setUsage(THREE.DynamicDrawUsage));geometry.setAttribute('normal',new THREE.BufferAttribute(normals,3).setUsage(THREE.DynamicDrawUsage));geometry.setIndex(indices);
-    const mesh=new THREE.Mesh(geometry,rubber);mesh.name=name;mesh.frustumCulled=false;group.add(mesh);
+    const mesh=new THREE.Mesh(geometry,cableMaterial);mesh.name=name;mesh.frustumCulled=false;group.add(mesh);
     const curve=new THREE.CatmullRomCurve3(),point=new THREE.Vector3(),tangent=new THREE.Vector3(),u=new THREE.Vector3(),v=new THREE.Vector3();
     function update(points,straightEnd){curve.points=points;const curvedSegments=straightEnd?segments-8:segments,start=points[points.length-1];for(let i=0;i<=segments;i++){
       if(i<=curvedSegments){curve.getPoint(i/curvedSegments,point);curve.getTangent(i/curvedSegments,tangent);}
@@ -144,6 +145,6 @@ export function createHeadphones(model,D){
       const key=[pose.progress.toFixed(5),pose.sway.toFixed(4),pose.swayDepth.toFixed(4)].join(':');
       if(key!==last){last=key;updateGeometry(pose);}
       return pose;
-    },dispose(){if(disposed)return;disposed=true;group.traverse(o=>o.geometry?.dispose());for(const material of [white,metal,rubber,grille,print])material.dispose();weave.dispose();model.remove(group);}
+    },dispose(){if(disposed)return;disposed=true;group.traverse(o=>o.geometry?.dispose());for(const material of [white,metal,rubber,cableMaterial,grille,print])material.dispose();weave.dispose();model.remove(group);}
   };
 }

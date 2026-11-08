@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import {createRoamStream} from './roam-stream.mjs';
 import {createWheelInput} from './wheel-input.mjs';
 import {createButtonPress} from './button-press.mjs';
+import libraryModule from '../music-service/library.cjs';
 import {coverUrl} from './artwork.mjs';
 import {menuMarker,listWindow,emptyContent,qualityLabel,appearanceIsDark,canAdvance,playbackGlyph} from './presentation.mjs';
 const source=fs.readFileSync(new URL('./player.mjs',import.meta.url),'utf8').replace(/^import[^\n]+\n/gm,'');
@@ -34,6 +35,23 @@ function fixture(routes={},clock={},useNative=false){
 test('liked songs have their own paged list and playback source',async()=>{
   const {app}=fixture({liked:(_,route)=>route.endsWith('=0')?{tracks:[song(3)],more:true,nextOffset:100}:{tracks:[song(4)],more:false,nextOffset:102}});
   await app.select();await choose(app,'喜欢的音乐');assert.equal(app.state.tracksSource,'liked');app.state.selected=1;await app.select();assert.deepEqual(Array.from(app.state.tracks,t=>t.id),[3,4]);app.state.selected=1;await app.select();assert.equal(app.state.queueMode,'liked');assert.equal(app.state.current.id,4);
+});
+
+test('playlist pages reach the browser and native queue in saved order despite shuffled metadata',async()=>{
+  for(const useNative of [false,true]){
+    const ids=Array.from({length:2003},(_,i)=>2003-i),routes=[];
+    const library=libraryModule.createLibrary({getSession:()=>({authenticated:true,cookie:'fixture-session',userId:7}),call:async name=>{
+      if(name==='user_playlist_create')return {body:{code:200,data:{playlist:[{id:88,name:'Playlist',userId:8,subscribed:true},{id:9,name:'Likes',userId:7,specialType:5},{id:3,name:'Created',userId:7}],more:false}}};
+      if(name==='user_playlist_collect')return {body:{code:200,data:{playlist:[{id:88,name:'Playlist',userId:8},{id:7,name:'Collected',userId:8}],more:false}}};
+      assert.equal(name,'playlist_detail');return {body:{code:200,playlist:{id:88,name:'Playlist',trackIds:ids.map(id=>({id})),tracks:ids.toReversed().map(id=>({id,name:'Track '+id,ar:[],dt:120000}))}}};
+    }});
+    const f=fixture({status:()=>({authenticated:true,nickname:'Fixture'}),playlists:async()=>({playlists:await library.playlists()}),tracks:(_,route)=>{routes.push(route);const query=new URLSearchParams(route.split('?')[1]);return library.tracks(query.get('id'),query.get('offset')??0);}},{},useNative),{app}=f;
+    await app.select();await choose(app,'我的歌单');assert.deepEqual(Array.from(app.state.playlists,p=>p.id),[88,3,7]);await app.select();assert.equal(app.state.tracks[0].id,2003);assert.equal(app.state.tracksMore,true);
+    for(let i=0;i<2;i++){app.state.selected=app.state.tracks.length;await app.select();}
+    assert.deepEqual(Array.from(app.state.tracks,t=>t.id),ids);assert.equal(app.state.tracksMore,false);assert.deepEqual(routes,['tracks?id=88','tracks?id=88&offset=1000','tracks?id=88&offset=2000']);
+    app.state.selected=2001;await app.select();assert.equal(app.state.current.id,2);assert.deepEqual(Array.from(app.state.queue,t=>t.id),ids);
+    if(useNative){assert.deepEqual(Array.from(f.nativeCalls.at(-1).tracks,t=>t.id),ids);assert.equal(f.nativeCalls.at(-1).index,2001);}
+  }
 });
 
 test('local library keeps previously imported downloads playable without a cloud connection',async()=>{

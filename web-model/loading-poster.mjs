@@ -1,4 +1,4 @@
-export const posterVersion='0.10.3';
+export const posterVersion='0.10.4';
 export const loadingPosterMarkup=`<div id="loadingPoster" class="loading-poster" role="status" aria-live="polite"><div class="ambient-backdrop poster-backdrop" aria-hidden="true"></div><div class="poster-content"><svg class="poster-outline" width="55" height="92" viewBox="0 0 55 92" fill="none" aria-hidden="true"><rect x="1" y="1" width="53" height="90" rx="8"/><rect x="7" y="8" width="41" height="31" rx="2"/><circle cx="27.5" cy="65" r="17"/><circle cx="27.5" cy="65" r="6"/></svg><div class="poster-wordmark">POCKET CLASSIC</div><p class="poster-caption">让音乐，慢慢回到手中。</p><span class="sr-only">正在准备播放器，可跳过开场</span></div><div class="poster-progress" aria-hidden="true"><i></i></div></div>`;
 
 // These are presentation times, never a claimed download percentage.

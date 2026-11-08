@@ -2,8 +2,8 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const { root, call, errorSummary, prepareKey } = require('./bridge.cjs');
-const { createDiscovery, normalizeTracks } = require('./discovery.cjs');
-const {createLibrary,ordinaryPlaylists}=require('./library.cjs');
+const { createDiscovery } = require('./discovery.cjs');
+const {createLibrary}=require('./library.cjs');
 const PORT = 17863;
 const origin = `http://127.0.0.1:${PORT}`;
 let cookie = '';
@@ -22,17 +22,9 @@ function send(res, value, status = 200) {
   res.end(JSON.stringify(value));
 }
 async function playlists() {
-  if (!cookie || !snapshot.userId) throw new Error('请先扫码登录');
-  const r = await call('user_playlist', { uid: snapshot.userId, limit: 100 }, cookie);
-  if (r.body.code !== 200) throw { body: r.body };
-  return ordinaryPlaylists(r.body.playlist || [],snapshot.userId);
+  return library.playlists();
 }
-async function tracks(id) {
-  const r = await call('playlist_detail', { id }, cookie);
-  if (r.body.code !== 200 || !r.body.playlist) throw { body: r.body };
-  return { id: r.body.playlist.id, name: r.body.playlist.name, trackCount: r.body.playlist.trackCount,
-    tracks: normalizeTracks(r.body.playlist.tracks || []) };
-}
+async function tracks(id,offset=0) { return library.tracks(id,offset); }
 async function resolve(id,quality='standard') {
   return library.resolve(id,quality);
 }
@@ -90,7 +82,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/tracks') {
       const id = url.searchParams.get('id');
       if (!/^\d+$/.test(id || '')) return send(res, { error: '无效歌单' }, 400);
-      return send(res, await tracks(id));
+      return send(res, await tracks(id,url.searchParams.get('offset')??'0'));
     }
     if (req.method === 'POST') {
       if (req.headers.origin !== origin && req.headers.origin !== `http://localhost:${PORT}` && req.headers['x-local-probe'] !== '1') return send(res, { error: 'Local page required' }, 403);
