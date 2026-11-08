@@ -37,7 +37,9 @@ test('mirrored upright earpieces remain fixed while cable endpoints follow their
   const model=new THREE.Group(),h=createHeadphones(model,D),l=h.group.getObjectByName('EarPod_L'),r=h.group.getObjectByName('EarPod_R');model.updateMatrixWorld(true);
   const lPose=l.matrixWorld.clone(),rPose=r.matrixWorld.clone(),lb=new THREE.Box3().setFromObject(l),rb=new THREE.Box3().setFromObject(r);
   assert.ok(Math.abs(lb.min.x+rb.max.x)<1e-8);assert.ok(Math.abs(lb.max.x+rb.min.x)<1e-8);assert.equal(lb.min.y,rb.min.y);assert.equal(lb.max.y,rb.max.y);assert.equal(lb.min.z,rb.min.z);assert.equal(lb.max.z,rb.max.z);
-  const ringCenter=(mesh,end)=>{const a=mesh.geometry.attributes.position,count=a.count/9,center=new THREE.Vector3();for(let j=0;j<8;j++)center.add(new THREE.Vector3().fromBufferAttribute(a,(end?count-1:0)*9+j));return center.multiplyScalar(1/8);};
+  assert.ok(rb.min.x-lb.max.x>.1&&rb.min.x-lb.max.x<.35,'The earpieces should sit close together without touching');
+  assert.ok(l.localToWorld(new THREE.Vector3(.539,.04,.025)).x<l.position.x);assert.ok(r.localToWorld(new THREE.Vector3(.539,.04,.025)).x>r.position.x);
+  const ringCenter=(mesh,end)=>{const a=mesh.geometry.attributes.position,count=a.count/9,center=new THREE.Vector3(),ring=typeof end==='number'?end:end?count-1:0;for(let j=0;j<8;j++)center.add(new THREE.Vector3().fromBufferAttribute(a,ring*9+j));return center.multiplyScalar(1/8);};
   h.setConnected(true);
   for(let i=0;i<100;i++){
     h.update(.016,{tiltX:Math.sin(i)*4,tiltY:Math.cos(i)*4});model.updateMatrixWorld(true);
@@ -45,6 +47,11 @@ test('mirrored upright earpieces remain fixed while cable endpoints follow their
     for(const [bud,name]of [[l,'Headphone_left_cable'],[r,'Headphone_right_cable']]){
       const connector=bud.getObjectByName('Cable_anchor').getWorldPosition(new THREE.Vector3()),wireEnd=ringCenter(h.group.getObjectByName(name),true);
       assert.ok(connector.distanceTo(wireEnd)<1e-6,'Cable must stay attached to its fixed stem');
+      const cable=h.group.getObjectByName(name),rows=cable.geometry.attributes.position.count/9;
+      for(let ring=rows-9;ring<rows;ring++){const center=ringCenter(cable,ring);assert.ok(Math.abs(center.x-connector.x)<1e-6);assert.ok(Math.abs(center.z-connector.z)<1e-6);assert.ok(center.y<=connector.y+1e-6);}
+      assert.ok(connector.y-ringCenter(cable,rows-9).y>.2199,'Leave a visible vertical drop before the rear bend');
+      const {position,normal}=cable.geometry.attributes,index=cable.geometry.index,face=[0,1,2].map(offset=>new THREE.Vector3().fromBufferAttribute(position,index.getX(index.count-3+offset)));
+      const outward=new THREE.Vector3().fromBufferAttribute(normal,index.getX(index.count-3));assert.ok(face[1].sub(face[0]).cross(face[2].sub(face[0])).dot(outward)>0,'Tube faces must follow their outward shading normals');
     }
     const plug=h.group.getObjectByName('Straight_TRRS_plug'),start=ringCenter(h.group.getObjectByName('Headphone_main_cable'),false);
     assert.ok(start.distanceTo(plug.localToWorld(new THREE.Vector3(0,1.20,0)))<1e-6);
@@ -56,7 +63,7 @@ test('accessory framing fits the model and upper cable inside the usable content
     const contentHeight=height-top-bottom,cx=(left+width-right)/2,cy=(top+height-bottom)/2,u=Math.max(11.9,6.95/((width-left-right)/contentHeight))/contentHeight;
     const view={width,height,contentHeight,centerX:cx,centerY:cy,frustum:{left:-cx*u,right:(width-cx)*u,top:cy*u-.28,bottom:-(height-cy)*u-.28}};
     assert.deepEqual(headphoneFrustum(view,0),view.frustum);const b=headphoneFrustum(view,1),unit=(b.top-b.bottom)/height;
-    assert.ok(b.top-top*unit>7.15);assert.ok(b.top-(height-bottom)*unit<-5.5);assert.ok(b.left+left*unit<=-D.width/2);assert.ok(b.right-right*unit>=D.width/2);
+    assert.ok(b.top-top*unit>7.35);assert.ok(b.top-(height-bottom)*unit<-5.5);assert.ok(b.left+left*unit<=-D.width/2);assert.ok(b.right-right*unit>=D.width/2);
   }
 });
 test('plug seats on the actual socket and repeated connections reuse finite decorative geometry',()=>{

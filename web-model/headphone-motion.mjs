@@ -44,8 +44,8 @@ export function createHeadphoneMotion(){
 
 export function headphoneFrustum(view,amount){
   const b=view.frustum;if(!amount)return {...b};
-  const h=Math.max((b.top-b.bottom)/view.height*view.contentHeight,13.35),units=h/view.contentHeight;
+  const h=Math.max((b.top-b.bottom)/view.height*view.contentHeight,13.65),units=h/view.contentHeight;
   const cx=view.centerX??view.width/2,cy=view.centerY??view.height/2;
-  const next={left:-cx*units,right:(view.width-cx)*units,top:cy*units+.55,bottom:-(view.height-cy)*units+.55};
+  const next={left:-cx*units,right:(view.width-cx)*units,top:cy*units+.62,bottom:-(view.height-cy)*units+.62};
   return Object.fromEntries(Object.entries(b).map(([key,value])=>[key,value+(next[key]-value)*amount]));
 }

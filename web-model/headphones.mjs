@@ -34,14 +34,14 @@ function speakerWeave(){
   const texture=new THREE.DataTexture(data,size,size);texture.colorSpace=THREE.SRGBColorSpace;texture.generateMipmaps=true;texture.minFilter=THREE.LinearMipmapLinearFilter;texture.needsUpdate=true;return texture;
 }
 
-function sideLetter(right){
+function sideLetter(right,mirrored){
   const shape=new THREE.Shape();
   if(!right){shape.moveTo(0,0);shape.lineTo(0,.12);shape.lineTo(.01,.12);shape.lineTo(.01,.01);shape.lineTo(.07,.01);shape.lineTo(.07,0);}
   else{
     shape.moveTo(0,0);shape.lineTo(0,.12);shape.lineTo(.045,.12);shape.quadraticCurveTo(.075,.12,.075,.088);shape.quadraticCurveTo(.075,.06,.044,.06);shape.lineTo(.082,0);shape.lineTo(.067,0);shape.lineTo(.029,.058);shape.lineTo(.011,.058);shape.lineTo(.011,0);
     const hole=new THREE.Path();hole.moveTo(.011,.108);hole.lineTo(.041,.108);hole.quadraticCurveTo(.063,.108,.063,.088);hole.quadraticCurveTo(.063,.070,.041,.070);hole.lineTo(.011,.070);shape.holes.push(hole);
   }
-  shape.closePath();const geometry=new THREE.ShapeGeometry(shape,8);geometry.translate(-.035,-.04,0);if(right){geometry.scale(-1,1,1);const index=geometry.index;for(let i=0;i<index.count;i+=3){const b=index.getX(i+1);index.setX(i+1,index.getX(i+2));index.setX(i+2,b);}}
+  shape.closePath();const geometry=new THREE.ShapeGeometry(shape,8);geometry.translate(-.035,-.04,0);if(mirrored){geometry.scale(-1,1,1);const index=geometry.index;for(let i=0;i<index.count;i+=3){const b=index.getX(i+1);index.setX(i+1,index.getX(i+2));index.setX(i+2,b);}}
   geometry.translate(.16,-.02,0);
   // Project the printed letter onto the curved casing instead of burying a flat decal.
   const positions=geometry.attributes.position;
@@ -72,17 +72,17 @@ export function createHeadphones(model,D){
     geometry.applyMatrix4(matrix);const key=parent.uuid+material.uuid;let batch=batches.get(key);
     if(!batch){batch={parent,material,geometry:[]};batches.set(key,batch);}batch.geometry.push(geometry.toNonIndexed());geometry.dispose();
   }
-  function lathe(points){return new THREE.LatheGeometry(points.map(p=>new THREE.Vector2(...p)),32);}
-  part(plug,metal,lathe([[0,-1.38],[.07,-1.37],[.164,-1.25],[.175,-1.15],[.175,-.03],[0,-.03]]));
-  part(plug,white,lathe([[0,0],[.25,0],[.27,.035],[.27,.84],[.24,.89],[.13,.89],[.12,1.20],[0,1.20]]));
-  for(const y of [-.98,-.68,-.38])part(plug,white,new THREE.CylinderGeometry(.177,.177,.055,32),[0,y,0]);
+  function lathe(points,radial=32){return new THREE.LatheGeometry(points.map(p=>new THREE.Vector2(...p)),radial);}
+  part(plug,metal,lathe([[0,-1.38],[.07,-1.37],[.164,-1.25],[.175,-1.15],[.175,-.03],[0,-.03]],64));
+  part(plug,white,lathe([[0,0],[.16,0],[.215,.012],[.25,.04],[.267,.08],[.275,.13],[.275,.72],[.268,.79],[.249,.84],[.216,.88],[.17,.90],[.132,.92],[.122,.96],[.12,1.15],[.105,1.20],[0,1.20]],64));
+  for(const y of [-.98,-.68,-.38])part(plug,white,new THREE.CylinderGeometry(.177,.177,.055,64),[0,y,0]);
   const sphere=()=>new THREE.SphereGeometry(1,24,16);
   const tails=[];
   for(const side of [-1,1]){
-    // Fixed, upright and mirrored: the two speaker openings face inward.
-    // Object transforms retain correct winding for the mirrored right shell.
+    // Fixed, upright and close together, with the speaker openings facing outward.
+    // Object transforms retain correct winding for the mirrored left shell.
     const bud=new THREE.Group();bud.name=side<0?'EarPod_L':'EarPod_R';
-    bud.position.set(side*.85,6.72,.32);bud.rotation.y=side*.23;bud.scale.set(-side*.68,.68,.68);earbuds.add(bud);
+    bud.position.set(side*.56,6.92,-D.depth/2-.16);bud.rotation.y=-side*.23;bud.scale.set(side*.68,.68,.68);earbuds.add(bud);
     const local=(material,geometry,p=[0,0,0],r=[0,0,0],s=[1,1,1])=>{
       part(bud,material,geometry,p,r,s);
     };
@@ -92,7 +92,7 @@ export function createHeadphones(model,D){
     local(grille,new THREE.CircleGeometry(1,48),[.539,.04,.025],[0,Math.PI/2,0],[.132,.244,1]);
     local(grille,sphere(),[-.30,.045,.437],[0,0,0],[.135,.045,.012]);
     local(grille,new THREE.CapsuleGeometry(.025,.12,3,8),[0,.34,-.29],[.2,0,0],[1,1,.14]);
-    local(print,sideLetter(side>0));
+    local(print,sideLetter(side>0,side<0));
     const anchor=new THREE.Object3D();anchor.name='Cable_anchor';anchor.position.set(-.22,-2.08,.025);bud.add(anchor);
     bud.updateMatrix();tails.push(anchor.position.clone().applyMatrix4(bud.matrix));
   }
@@ -105,19 +105,21 @@ export function createHeadphones(model,D){
     const merged=mergeGeometries(geometry,false);geometry.forEach(g=>g.dispose());parent.add(new THREE.Mesh(merged,material));
   }
   const cables=[];
-  function cable(segments,name){
+  function cable(segments,name,radius){
     const radial=8,positions=new Float32Array((segments+1)*(radial+1)*3),normals=new Float32Array(positions.length),indices=[];
-    for(let i=0;i<segments;i++)for(let j=0;j<radial;j++){const a=i*(radial+1)+j,b=a+radial+1;indices.push(a,b,a+1,a+1,b,b+1);}
+    for(let i=0;i<segments;i++)for(let j=0;j<radial;j++){const a=i*(radial+1)+j,b=a+radial+1;indices.push(a,a+1,b,a+1,b+1,b);}
     const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3).setUsage(THREE.DynamicDrawUsage));geometry.setAttribute('normal',new THREE.BufferAttribute(normals,3).setUsage(THREE.DynamicDrawUsage));geometry.setIndex(indices);
     const mesh=new THREE.Mesh(geometry,rubber);mesh.name=name;mesh.frustumCulled=false;group.add(mesh);
     const curve=new THREE.CatmullRomCurve3(),point=new THREE.Vector3(),tangent=new THREE.Vector3(),u=new THREE.Vector3(),v=new THREE.Vector3();
-    function update(points){curve.points=points;for(let i=0;i<=segments;i++){
-      curve.getPoint(i/segments,point);curve.getTangent(i/segments,tangent);u.set(-tangent.y,tangent.x,0).normalize();v.crossVectors(tangent,u).normalize();
-      for(let j=0;j<=radial;j++){const a=j/radial*Math.PI*2,c=Math.cos(a),s=Math.sin(a),nx=u.x*c+v.x*s,ny=u.y*c+v.y*s,nz=u.z*c+v.z*s,offset=(i*(radial+1)+j)*3;positions[offset]=point.x+nx*.052;positions[offset+1]=point.y+ny*.052;positions[offset+2]=point.z+nz*.052;normals[offset]=nx;normals[offset+1]=ny;normals[offset+2]=nz;}
+    function update(points,straightEnd){curve.points=points;const curvedSegments=straightEnd?segments-8:segments,start=points[points.length-1];for(let i=0;i<=segments;i++){
+      if(i<=curvedSegments){curve.getPoint(i/curvedSegments,point);curve.getTangent(i/curvedSegments,tangent);}
+      else{point.copy(start).lerp(straightEnd,(i-curvedSegments)/8);tangent.subVectors(straightEnd,start).normalize();}
+      u.set(-tangent.y,tangent.x,0).normalize();v.crossVectors(tangent,u).normalize();
+      for(let j=0;j<=radial;j++){const a=j/radial*Math.PI*2,c=Math.cos(a),s=Math.sin(a),nx=u.x*c+v.x*s,ny=u.y*c+v.y*s,nz=u.z*c+v.z*s,offset=(i*(radial+1)+j)*3;positions[offset]=point.x+nx*radius;positions[offset+1]=point.y+ny*radius;positions[offset+2]=point.z+nz*radius;normals[offset]=nx;normals[offset+1]=ny;normals[offset+2]=nz;}
     }geometry.attributes.position.needsUpdate=true;geometry.attributes.normal.needsUpdate=true;}
     cables.push({mesh,update});return {update};
   }
-  const lead=cable(48,'Headphone_main_cable'),left=cable(32,'Headphone_left_cable'),right=cable(64,'Headphone_right_cable'),motion=createHeadphoneMotion();
+  const lead=cable(48,'Headphone_main_cable',.045),left=cable(32,'Headphone_left_cable',.032),right=cable(64,'Headphone_right_cable',.032),motion=createHeadphoneMotion();
   let last='',pose={progress:0,framing:0,visible:false},disposed=false;
   function updateGeometry(next){
     const rise=(1-next.insert)*2.15,s=next.sway,z=next.swayDepth;
@@ -127,9 +129,10 @@ export function createHeadphones(model,D){
     // Fold directly behind the plug, then route the complete junction behind the case.
     lead.update([start,point(D.jackX+s*.15,6.45+rise,-.17+z*.2),point(D.jackX+s*.35,6.27+rise*.8,rear+z),point(1.85+s,4.80+rise*.1,rear+z),split]);
     const [l,r]=tails;
-    left.update([split,point(l.x+s*.6,4.55,rear+z*.6),point(l.x+s*.3,5.10,rear+z*.3),point(l.x,5.27,-.35),l]);
+    const leftStraight=point(l.x,l.y-.22,l.z),rightStraight=point(r.x,r.y-.22,r.z);
+    left.update([split,point(l.x+s*.6,4.55,rear+z*.6),point(l.x+s*.3,5.10,rear+z*.3),point(l.x,leftStraight.y-.035,l.z),leftStraight],l);
     const remoteX=r.x+s*.4,remoteZ=rear+z*.4;
-    right.update([split,point(r.x+s*.6,4.55,rear+z*.6),point(remoteX,4.60,remoteZ),point(remoteX,4.78,remoteZ),point(r.x+s*.3,5.10,rear+z*.3),point(r.x,5.27,-.35),r]);
+    right.update([split,point(r.x+s*.6,4.55,rear+z*.6),point(remoteX,4.60,remoteZ),point(remoteX,4.78,remoteZ),point(r.x+s*.3,5.10,rear+z*.3),point(r.x,rightStraight.y-.035,r.z),rightStraight],r);
     remote.position.set(remoteX,4.69,remoteZ);
   }
   updateGeometry({...pose,insert:0,sway:0,swayDepth:0});

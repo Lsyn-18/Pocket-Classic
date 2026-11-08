@@ -235,10 +235,10 @@ export function createClassic(screenTexture,{baseline=visualBaseline}={}) {
   const seam = add('Center_button_seam', new THREE.RingGeometry(dimensions.centerRadius,inner,128), materials.wheelSeam, [0,dimensions.wheelY,.507], 'wheel'); seam.castShadow = false;
   const printMaterial = new THREE.MeshBasicMaterial({ map: wheelPrinting(), color:'#697783', transparent: true, depthWrite: false, toneMapped:false });
   const printing = add('Printed_click_wheel_symbols', new THREE.PlaneGeometry(dimensions.wheelRadius*2,dimensions.wheelRadius*2), printMaterial, [0,dimensions.wheelY,.509], 'wheel'); printing.castShadow = false;
-  const port = add('Headphone_socket_rim', new THREE.TorusGeometry(.203,.023,10,48), materials.steel, [dimensions.jackX,5.181,dimensions.portZ], 'case'); port.rotation.x = -Math.PI / 2;
-  const socket = new THREE.CylinderGeometry(.175,.175,.16,48);
+  const port = add('Headphone_socket_rim', new THREE.TorusGeometry(.203,.023,16,96), materials.steel, [dimensions.jackX,5.181,dimensions.portZ], 'case'); port.rotation.x = -Math.PI / 2;
+  const socket = new THREE.CylinderGeometry(.175,.175,.16,64);
   add('Headphone_socket_inner_wall', socket, materials.black, [dimensions.jackX,5.105,dimensions.portZ], 'case');
-  const jackBottom = add('Headphone_socket_dark_interior', new THREE.CircleGeometry(.176,48), materials.black, [dimensions.jackX,5.187,dimensions.portZ], 'case'); jackBottom.rotation.x = -Math.PI / 2;
+  const jackBottom = add('Headphone_socket_dark_interior', new THREE.CircleGeometry(.176,64), materials.black, [dimensions.jackX,5.187,dimensions.portZ], 'case'); jackBottom.rotation.x = -Math.PI / 2;
   function topCapsule(name,w,h,material,x,y,z,zone){const shape=new THREE.ShapeGeometry(roundedShape(w,h,h/2),24);const mesh=add(name,shape,material,[x,y,z],zone);mesh.rotation.x=-Math.PI/2;return mesh;}
   const holdBase = topCapsule('Hold_switch_recess',1.05,.34,materials.black,dimensions.holdX,5.181,dimensions.portZ,'hold');
   const orange = topCapsule('Hold_orange_indicator',1.0,.29,new THREE.MeshStandardMaterial({color:'#cf6c26',roughness:.7}),dimensions.holdX,5.186,dimensions.portZ,'hold');
