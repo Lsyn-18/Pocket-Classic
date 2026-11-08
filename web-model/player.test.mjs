@@ -65,6 +65,11 @@ test('feedback levels restore the battery, protect warnings and expose keyboard 
 test('native Back dismisses a warning before navigating or exiting',()=>{
   const {app}=fixture({}, {},true);app.feedback('按键已锁定','warning');app.native.back();assert.equal(app.state.feedback,'');assert.equal(app.state.page,'home');
 });
+test('switching volume and progress updates inline guidance without a feedback overlay',()=>{
+  const {app,elements}=fixture();Object.assign(app.state,{page:'playing',current:song(1),queue:[song(1)],queueIndex:0,mode:'volume'});
+  app.audio.currentTime=32;app.feedback('旧提示');
+  for(let i=0;i<4;i++){app.screenAction('mode');assert.equal(app.state.feedback,'');assert.equal(app.state.mode,i%2?'volume':'seek');assert.equal(elements.get('uiAnnouncement').textContent,i%2?'转动转轮调整音量':'转动转轮调整进度');assert.equal(app.audio.currentTime,32);assert.equal(app.audio.volume,.65);}
+});
 test('music menu contains playlists, daily recommendations, private roaming and followed artists',async()=>{
   const {app}=fixture();await app.select();assert.equal(app.state.page,'music');assert.deepEqual(Array.from(app.entries(),x=>x.name),['喜欢的音乐','我的歌单','手机本地音乐','每日推荐','私人漫游','关注的歌手']);
 });

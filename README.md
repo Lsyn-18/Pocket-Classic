@@ -6,7 +6,7 @@
 
 <p align="center"><img src="docs/branding/pocket-classic-icon.svg" width="128" alt="Pocket Classic 白银色软件图标"></p>
 
-> 当前版本为 **Android 0.9.1 独立测试版**：修复桌面再次打开时未触发“加载画报 → 五秒转轮序章”，以及减少动态效果提前移除静态画报的问题。保留摄影棚背景、三级提示、系统媒体音量与已确认的体感响应。见 [开场原因与修复](docs/STARTUP-REENTRY.md)、[背景优化](docs/AMBIENCE.md)。下载 [Android 0.9.1 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.9.1)，附 SHA-256 校验文件与单文件应用预览；本轮无安卓设备，尚未真机复验。
+> 当前版本为 **Android 0.9.2 独立测试版**：画报与五秒转轮序章仅在应用进程被清理后的冷启动显示，普通返回和重复点图标不重播；播放页封面放大，切换进度 / 音量使用浅色内嵌提示。保留摄影棚背景、系统媒体音量与已确认的体感响应。见 [当前规则与验证](docs/STARTUP-PROCESS.md)、[背景优化](docs/AMBIENCE.md)。下载 [Android 0.9.2 测试包](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.9.2)，附 SHA-256 校验文件与单文件应用预览；本轮无安卓设备，尚未真机复验。
 
 **把熟悉的转轮和网易云音乐，放进一个口袋播放器。**
 
@@ -22,7 +22,7 @@ Pocket Classic 是一个以 iPod Classic 为灵感的音乐播放器项目。它
 
 <p align="center"><img src="docs/images/frosted-silver.png" width="240" alt="冷银摄影棚：磨砂金属、高清 LCD 与柔和倒影"><img src="docs/images/frosted-black.png" width="240" alt="深色磨砂机身与低饱和摄影棚背景"></p>
 
-1. 下载并安装 [Android 0.9.1 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.9.1)。
+1. 下载并安装 [Android 0.9.2 测试版](https://github.com/Lsyn-18/Pocket-Classic/releases/tag/v0.9.2)。
 2. 点击底部「连接网易云」，再点击「保存并打开网易云」。
 3. 在网易云「扫一扫 → 相册」选择刚保存的二维码，确认授权后返回播放器。
 4. 进入「音乐」选择喜欢的音乐、我的歌单、每日推荐或私人漫游。离线音乐可直接进入「手机本地音乐」导入，不需要登录。

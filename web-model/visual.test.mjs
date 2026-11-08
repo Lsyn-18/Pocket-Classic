@@ -45,6 +45,13 @@ test('LCD errors and playback expose actions rather than stale list hit targets'
   assert.equal(screen.hit(260,207),'queue');assert.equal(screen.hit(130,160),'mode');assert.equal(screen.hit(120,70),'details');screen.dispose();
 });
 
+test('enlarged cover remains a details target above the progress and volume controls',()=>{
+  const state={page:'playing',mode:'volume',current:{id:1,name:'封面',artist:'音乐'},queue:[{id:1}],queueIndex:0};
+  const app={state,audio:{paused:true,currentTime:20,duration:120,volume:.6},entries:()=>[],format:()=> '0:20',footerText:()=>''},screen=makeScreen(app);
+  for(const mode of ['volume','seek']){state.mode=mode;screen.draw(true);assert.equal(screen.hit(115,144),'details');assert.equal(screen.hit(80,162),'mode');assert.equal(screen.hit(150,207),'mode');assert.equal(screen.hit(260,207),'queue');}
+  screen.dispose();
+});
+
 test('markers distinguish navigation, playing tracks, quality and boolean settings',()=>{
   const state={current:{id:5},quality:'hires',haptics:false,repeat:2};
   assert.equal(menuMarker('tracks',{id:5},0,state),'▶');assert.equal(menuMarker('tracks',{id:6},1,state),'');assert.equal(menuMarker('quality',{id:'hires'},0,state),'✓');assert.equal(menuMarker('settings',{},1,state),'关');

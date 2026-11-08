@@ -118,6 +118,8 @@ body.dark:not(.visual-baseline){background:#101a29;color:#dce7f2}
 .help-content{padding:0 22px 22px}.help-content p{margin:14px 0}.help-content dl{margin:18px 0}.help-content .actions{margin-top:20px}
 .dark .help-heading button{color:#9acbfa}.dark .dialog-eyebrow{color:#9eb8d0}
 .progress,.progress.seek{height:3px;border:0;border-radius:0;outline:0;background:#c5d2df}.progress i{background:#2874b9}
+.track-head>.album{width:28cqw;height:28cqw;min-width:28cqw}
+.now .progress-caption{color:#3d5670;background:transparent;border:0;box-shadow:none}
 /* One projection from the silver outlines to the real wheel and full player. */
 .startup-rings{position:absolute;left:0;top:0;width:0;height:0;pointer-events:none;z-index:3;will-change:opacity}
 .startup-rings i{position:absolute;display:block;border:1px solid #919ca7;border-radius:50%;transform:translate(-50%,-50%);box-sizing:border-box;box-shadow:0 1px 1px #fff9,inset 0 1px 1px #ffffff70}

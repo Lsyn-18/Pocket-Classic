@@ -2,7 +2,6 @@ package com.pocketclassic.player
 
 import android.annotation.SuppressLint
 import android.graphics.Color
-import android.content.Intent
 import android.media.AudioManager
 import android.view.KeyEvent
 import android.view.View
@@ -31,7 +30,7 @@ class NativePlayerHost(
     private var destroyed = false
     private var foreground = false
     private var revision = -1L
-    @Volatile private var documentGeneration = 0L
+    private val showOpening = vm.claimOpening()
     private val motion = NativeMotion(activity) { value -> emit(JSONObject().put("type", "orientation").put("value", value)) }
     private val battery = NativeBattery(activity) { value -> if (ready && foreground) emit(JSONObject().put("type", "battery").put("value", value)) }
     private val haptics = NativeHaptics(activity)
@@ -67,7 +66,12 @@ class NativePlayerHost(
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse {
                     val uri = request.url
                     if (request.method == "GET" && NativeContract.trustedAsset(uri.scheme, uri.host, uri.path) && uri.query == null) {
-                        return WebResourceResponse("text/html", "UTF-8", 200, "OK", mapOf("Cache-Control" to "no-store"), activity.assets.open("player.html"))
+                        val source = activity.assets.open("player.html")
+                        // Hide introductory markup before first paint on a warm
+                        // Activity recreation, rather than waiting for JS ready.
+                        val content = if (showOpening) source else source.bufferedReader().use { it.readText() }
+                            .replace("<head>","<head><style>#loadingPoster,.startup-skip,.startup-rings{display:none}</style>").byteInputStream(Charsets.UTF_8)
+                        return WebResourceResponse("text/html", "UTF-8", 200, "OK", mapOf("Cache-Control" to "no-store"), content)
                     }
                     return WebResourceResponse("text/plain", "UTF-8", 403, "Blocked", emptyMap(), ByteArrayInputStream(ByteArray(0)))
                 }
@@ -95,16 +99,15 @@ class NativePlayerHost(
     }
     private fun handle(raw: String) {
         if (raw.length > 2_000_000) return
-        val generation = documentGeneration
         activity.lifecycleScope.launch {
-            if (destroyed || generation != documentGeneration || webView.url != NativeContract.ORIGIN + NativeContract.PLAYER_PATH) return@launch
+            if (destroyed || webView.url != NativeContract.ORIGIN + NativeContract.PLAYER_PATH) return@launch
             var id = 0
             try {
                 val message = JSONObject(raw); id = message.getInt("id"); require(id > 0)
                 val method = message.getString("method"); require(method in NativeContract.methods)
                 val args = message.optJSONObject("args") ?: JSONObject()
                 val result: Any = when (method) {
-                    "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true).put("battery", battery.read()).put("opening", vm.claimOpening()).put("posterVersion",vm.posterVersion) }
+                    "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true).put("battery", battery.read()).put("opening", showOpening).put("posterVersion",vm.posterVersion) }
                     "api" -> vm.browserApi(args.getString("route"))
                     "connection" -> { vm.showConnection(); JSONObject() }
                     "localScan", "localImport", "localFolder" -> localAction(method, args.optString("category", "device"))
@@ -123,9 +126,9 @@ class NativePlayerHost(
                     "finish" -> { activity.finish(); JSONObject() }
                     else -> throw IllegalArgumentException("不支持此操作")
                 }
-                if (generation == documentGeneration) emit(JSONObject().put("type", "response").put("id", id).put("ok", true).put("result", result))
+                emit(JSONObject().put("type", "response").put("id", id).put("ok", true).put("result", result))
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { if (generation == documentGeneration) emit(JSONObject().put("type", "response").put("id", id).put("ok", false).put("error", e.message?.take(160) ?: "手机操作暂时无法完成")) }
+            catch (e: Exception) { emit(JSONObject().put("type", "response").put("id", id).put("ok", false).put("error", e.message?.take(160) ?: "手机操作暂时无法完成")) }
         }
     }
     private fun emit(packet: JSONObject) {
@@ -140,15 +143,6 @@ class NativePlayerHost(
     }
     fun connectionChanged() { if (ready) emit(JSONObject().put("type", "connection")) }
     fun back() { if (ready) webView.evaluateJavascript("window.PocketClassicNative&&window.PocketClassicNative.back();", null) else activity.finish() }
-    fun onNewIntent(intent: Intent) {
-        if (destroyed || !vm.openingIntent(intent.action,intent.categories)) return
-        // A launcher tap can reuse this Activity and its already-finished page.
-        // Remount only the UI; Media3, its queue and system volume stay native.
-        if (webView.url == NativeContract.ORIGIN + NativeContract.PLAYER_PATH) {
-            documentGeneration++; ready = false; revision = -1L
-            webView.reload()
-        }
-    }
     fun resume() {
         if (destroyed) return
         foreground = true; webView.resumeTimers(); webView.onResume()

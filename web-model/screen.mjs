@@ -50,15 +50,15 @@ export function makeScreen(app,{pixelScale=4,maxAnisotropy=1,baseline=visualBase
     text(s.title,8,12,208,14,'#202c38',600);if(s.hold)text('HOLD',221,12,35,9,'#475b6c',600);
     const glyph=!neutral&&playbackGlyph(s.current,a?.paused);if(glyph){c.fillStyle='#246ab4';if(glyph==='pause'){c.fillRect(265,7,3,10);c.fillRect(270,7,3,10);}else{c.beginPath();c.moveTo(265,7);c.lineTo(273,12);c.lineTo(265,17);c.closePath();c.fill();}}if(s.feedback&&s.feedbackLevel==='state')text(s.feedback,276,12,42,10,'#33506a');else drawBattery(c,s.battery);
     if(s.page==='playing'&&s.current){
-      const t=s.current;album(12,38,90,t);text(t.name,114,51,194,s.largeText?17:15,'#172b3e',600,true);text(t.artist,114,76,194,13,'#40576c');text(t.album||'未知专辑',114,98,194,11,'#53677c');
+      const t=s.current;album(12,38,108,t);text(t.name,134,51,174,s.largeText?17:15,'#172b3e',600,true);text(t.artist,134,76,174,13,'#40576c');text(t.album||'未知专辑',134,98,174,11,'#53677c');
       const status=s.seeking?(s.seeking>0?'快进 ››':'‹‹ 快退'):s.buffering?'正在缓冲…':s.trial?'试听片段':a.paused?'已暂停':'正在播放';
-      text(status,114,120,90,11,'#275783',500);text(s.queueMode==='local'?'离线 · '+(t.format||'本地'):s.actualQuality?qualityLabel(s.actualQuality):'按权限提供',210,120,98,10,'#52677a');
+      text(status,134,120,174,11,'#275783',500);text(s.queueMode==='local'?'离线 · '+(t.format||'本地'):s.actualQuality?qualityLabel(s.actualQuality):'按权限提供',134,140,174,10,'#52677a');
       const duration=Number.isFinite(a.duration)?a.duration:t.durationMs/1000,progress=Math.max(0,Math.min(1,(a.currentTime||0)/Math.max(1,duration))),seek=s.mode==='seek';
       c.fillStyle='#c5d2df';c.fillRect(14,162,292,3);c.fillStyle=seek||s.seeking?'#125dae':'#2874b9';c.fillRect(14,162,292*progress,3);
-      text(app.format(a.currentTime),14,181,110,11);text('−'+app.format(duration-a.currentTime),254,181,54,11);
+      text(app.format(a.currentTime),14,181,110,11);text(seek?'调整进度':'播放进度',128,181,108,10,seek?'#205e9f':'#53677c',seek?600:400);text('−'+app.format(duration-a.currentTime),254,181,54,11);
       text('音量 '+Math.round(a.volume*100)+'%',14,207,90,11,seek?'#53677c':'#205e9f',seek?400:600);c.fillStyle='#d8e0e8';c.fillRect(104,205,100,4);c.fillStyle=seek?'#8b9caf':'#2874b9';c.fillRect(104,205,100*a.volume,4);
       text('队列 '+(s.queueIndex+1)+'/'+s.queue.length+' ›',225,207,83,11,'#275f92',500);
-      zones.push({x:8,y:140,width:200,height:80,action:'mode'},{x:215,y:194,width:100,height:28,action:'queue'},{x:10,y:28,width:300,height:108,action:'details'});
+      zones.push({x:8,y:154,width:200,height:66,action:'mode'},{x:215,y:194,width:100,height:28,action:'queue'},{x:10,y:28,width:300,height:124,action:'details'});
     }else{
       const list=neutral?['音乐','正在播放','随机播放歌曲','设置'].map(name=>({name})):app.entries();const layout=listWindow(s,list.length),{start,visible,rowHeight,width}=layout;
       if(s.page==='home'){
@@ -79,7 +79,8 @@ export function makeScreen(app,{pixelScale=4,maxAnisotropy=1,baseline=visualBase
       listLayout={...layout,count:list.length};
     }
     c.fillStyle='#e8eef4';c.fillRect(0,224,320,16);const count=app.entries?.().length||0,position=count>5&&s.page!=='playing'?`${(s.selected||0)+1}/${count}`:'';
-    text(neutral?'Pocket Classic':s.problem?'点此重试 · '+s.problem.message:app.footerText?.()||'MENU 返回 · 中央键选择',7,232,position?262:306,10,s.problem?'#33506a':'#4e657b');if(position)text(position,277,232,38,9,'#526a80');
+    const footer=s.page==='playing'&&s.current?(s.mode==='seek'?'转轮调整进度 · 中央键切换音量':'转轮调整音量 · 中央键切换进度'):app.footerText?.()||'MENU 返回 · 中央键选择';
+    text(neutral?'Pocket Classic':s.problem?'点此重试 · '+s.problem.message:footer,7,232,position?262:306,10,s.problem?'#33506a':'#4e657b');if(position)text(position,277,232,38,9,'#526a80');
     if(s.busy){c.fillStyle='#fbfcfef2';c.fillRect(0,24,320,200);text('正在读取'+s.title+'…',27,112,266,15,'#365874',500);text('按 MENU 可返回',27,142,266,12,'#526a80');}
     if(s.problem)zones.push({x:0,y:224,width:320,height:16,action:'retry'});
     if(s.feedback&&s.feedbackLevel!=='state'){

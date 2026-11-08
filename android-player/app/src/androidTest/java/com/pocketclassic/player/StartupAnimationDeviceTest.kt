@@ -64,7 +64,7 @@ class StartupAnimationDeviceTest {
         shell("am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -f 0x10000000 -n com.pocketclassic.player/.MainActivity")
         ready("!!window.PocketClassicContext&&document.body.classList.contains('three-ready')", 45_000)
     }
-    private fun relaunch() {
+    private fun relaunch(resetOpeningForAnimationCheck: Boolean = true) {
         lateinit var previous: MainActivity
         onActivity { previous = it; it.finish() }
         val end = SystemClock.elapsedRealtime() + 10_000
@@ -73,6 +73,12 @@ class StartupAnimationDeviceTest {
             instrumentation.runOnMainSync { destroyed = previous.isDestroyed }; Thread.sleep(60)
         }
         assertTrue("Previous activity did not finish", destroyed)
+        if (resetOpeningForAnimationCheck) instrumentation.runOnMainSync {
+            // UI scenarios need independent opening states within one runner
+            // process. This does not substitute for a real process-death test.
+            val claimed = OpeningSession::class.java.getDeclaredField("claimed")
+            claimed.isAccessible = true; claimed.setBoolean(OpeningSession.process,false)
+        }
         launch(); onActivity { assertNotSame("Launcher reused the old activity", previous, it) }
     }
     private fun tap(selector: String) {
@@ -110,7 +116,7 @@ class StartupAnimationDeviceTest {
         var originalOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         store.reducedMotion = false
         try {
-            launch(); onActivity { originalOrientation = it.requestedOrientation }
+            launch(); relaunch(); onActivity { originalOrientation = it.requestedOrientation }
             assertEquals("false", js("matchMedia('(prefers-reduced-motion: reduce)').matches"))
             ready("document.body.classList.contains('startup-playing')")
             js("""
@@ -150,15 +156,17 @@ class StartupAnimationDeviceTest {
 
             val volumeBeforeReentry = js("window.PocketClassicContext.audio.volume")
             js("window.retainedOpeningProbe='old-page'")
-            shell("input keyevent KEYCODE_HOME"); Thread.sleep(400); launch()
-            ready("document.body.classList.contains('startup-playing')")
-            assertEquals("undefined",js("typeof window.retainedOpeningProbe").trim('"'))
-            js("window.PocketClassicContext.native.ready.then(value=>window.reentrySnapshot=value);true")
-            ready("!!window.reentrySnapshot")
-            assertEquals("true",js("window.reentrySnapshot.opening"))
-            ready("document.getElementById('modelViewport').dataset.opening==='complete'")
+            repeat(2) {
+                shell("input keyevent KEYCODE_HOME"); Thread.sleep(400); launch()
+                assertEquals("\"old-page\"",js("window.retainedOpeningProbe"))
+                assertEquals("false",js("document.body.classList.contains('startup-playing')||!!document.getElementById('loadingPoster')"))
+            }
             assertEquals(volumeBeforeReentry,js("window.PocketClassicContext.audio.volume"))
-            usable(); step("Explicit desktop launcher entry replays poster and wheel without changing media volume")
+            usable(); step("Repeated desktop launcher entries keep the existing player without replay")
+            relaunch(false)
+            ready("document.getElementById('modelViewport').dataset.opening==='restored'")
+            assertEquals("false",js("!!document.getElementById('loadingPoster')"))
+            usable(); step("A recreated Activity in the same process also skips both openings")
 
             relaunch(); js("window.PocketClassicContext.action('menu',true)")
             ready("document.getElementById('modelViewport').dataset.opening==='wheel'"); capture("startup-wheel.png")

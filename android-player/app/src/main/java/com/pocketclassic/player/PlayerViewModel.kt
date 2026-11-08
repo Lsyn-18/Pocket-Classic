@@ -43,9 +43,8 @@ data class ClassicState(
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
-    private val opening = OpeningSession()
+    private val opening = OpeningSession.process
     fun claimOpening(): Boolean = opening.claim()
-    fun openingIntent(action: String?, categories: Set<String>?): Boolean = opening.onNewIntent(action,categories)
     private val store = MusicSessionStore(application)
     val posterVersion: String get() = store.posterVersion
     fun markPosterReady(version: String) { require(NativeContract.validPosterVersion(version));store.posterVersion=version }

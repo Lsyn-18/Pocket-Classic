@@ -2,33 +2,25 @@ package com.pocketclassic.player
 
 import org.junit.Assert.*
 import org.junit.Test
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
 class OpeningSessionTest {
-    private val main = "android.intent.action.MAIN"
-    private val launcher = setOf("android.intent.category.LAUNCHER")
-
-    @Test fun coldEntryAndRecreatedWebViewClaimTheOpeningOnlyOnce() {
-        val session = OpeningSession()
-        assertTrue(session.claim())
-        assertFalse(session.claim())
+    @Test fun activitiesAndWebViewsShareTheSameProcessMarker() {
+        assertTrue(OpeningSession.process.claim())
+        repeat(4) { assertFalse("Returning or recreating an Activity must not replay the opening",OpeningSession.process.claim()) }
     }
 
-    @Test fun repeatedLauncherEntriesRearmTheRetainedPage() {
-        val session = OpeningSession()
-        assertTrue(session.claim())
-        repeat(3) {
-            assertTrue(session.onNewIntent(main,launcher))
-            assertTrue("A desktop icon tap must start both openings again",session.claim())
-            assertFalse("Recreating the same entry must not replay it twice",session.claim())
-        }
+    @Test fun aFreshProcessHasANewOpeningAfterThePreviousProcessIsGone() {
+        val previousProcess = OpeningSession()
+        assertTrue(previousProcess.claim()); assertFalse(previousProcess.claim())
+        val freshProcess = OpeningSession()
+        assertTrue(freshProcess.claim()); assertFalse(freshProcess.claim())
     }
 
-    @Test fun notificationExternalLinkAndOrdinaryResumeDoNotRearm() {
-        val session = OpeningSession()
-        assertTrue(session.claim())
-        for ((action,categories) in listOf(null to null,main to null,"android.intent.action.VIEW" to launcher)) {
-            assertFalse(session.onNewIntent(action,categories))
-            assertFalse(session.claim())
-        }
+    @Test fun concurrentPagesCanOnlyClaimOneOpeningInAProcess() {
+        val session = OpeningSession(); val pool = Executors.newFixedThreadPool(4)
+        try { assertEquals(1,pool.invokeAll(List(8) { Callable { session.claim() } }).count { it.get() }) }
+        finally { pool.shutdownNow() }
     }
 }

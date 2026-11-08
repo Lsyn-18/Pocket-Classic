@@ -114,11 +114,6 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        if (::playerHost.isInitialized) playerHost.onNewIntent(intent)
-    }
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) WindowCompat.getInsetsController(window, window.decorView).apply {
