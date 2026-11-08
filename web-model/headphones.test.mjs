@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {createHeadphoneMotion,headphoneFrustum} from './headphone-motion.mjs';
+import {createHeadphoneMotion,headphoneFrustum,MAX_CABLE_SWAY} from './headphone-motion.mjs';
 import {createHeadphones} from './headphones.mjs';
 import {dimensions as D} from './geometry.mjs';
 const advance=(m,n=30,options={})=>{let p;for(let i=0;i<n;i++)p=m.step(.05,options);return p;};
@@ -20,6 +20,36 @@ test('startup defers insertion and wheel gestures pause its camera framing witho
 test('reduced motion, previews and background settling preserve the real connection state',()=>{
   const m=createHeadphoneMotion();m.preview();assert.equal(advance(m,1,{reducedMotion:true}).progress,1);let p=advance(m,150);assert.equal(p.connected,false);assert.equal(p.progress,0);
   m.setConnected(true);assert.equal(advance(m,1,{reducedMotion:true}).progress,1);m.preview();m.snap();p=m.step(0);assert.equal(p.progress,1);assert.equal(p.preview,false);
+});
+
+test('cable sway stays bounded under extreme tilt, freezes during input and settles without idle oscillation',()=>{
+  const m=createHeadphoneMotion();m.setConnected(true);m.snap();let p;
+  for(let i=0;i<900;i++){
+    p=m.step([0,.008,.05,.016][i%4],{tiltX:Math.sin(i)*10,tiltY:Math.cos(i)*30});
+    assert.ok(Math.hypot(p.sway,p.swayDepth)<=MAX_CABLE_SWAY+1e-9);
+  }
+  const held=m.step(.05,{paused:true,tiltX:30,tiltY:-30});assert.equal(held.sway,p.sway);assert.equal(held.swayDepth,p.swayDepth);
+  p=advance(m,100);assert.ok(Math.hypot(p.sway,p.swayDepth)<1e-6);
+  m.step(.05,{tiltX:5,tiltY:5});p=m.step(.05,{reducedMotion:true});assert.equal(p.sway,0);assert.equal(p.swayDepth,0);
+});
+
+test('mirrored upright earpieces remain fixed while cable endpoints follow their actual connectors',()=>{
+  const model=new THREE.Group(),h=createHeadphones(model,D),l=h.group.getObjectByName('EarPod_L'),r=h.group.getObjectByName('EarPod_R');model.updateMatrixWorld(true);
+  const lPose=l.matrixWorld.clone(),rPose=r.matrixWorld.clone(),lb=new THREE.Box3().setFromObject(l),rb=new THREE.Box3().setFromObject(r);
+  assert.ok(Math.abs(lb.min.x+rb.max.x)<1e-8);assert.ok(Math.abs(lb.max.x+rb.min.x)<1e-8);assert.equal(lb.min.y,rb.min.y);assert.equal(lb.max.y,rb.max.y);assert.equal(lb.min.z,rb.min.z);assert.equal(lb.max.z,rb.max.z);
+  const ringCenter=(mesh,end)=>{const a=mesh.geometry.attributes.position,count=a.count/9,center=new THREE.Vector3();for(let j=0;j<8;j++)center.add(new THREE.Vector3().fromBufferAttribute(a,(end?count-1:0)*9+j));return center.multiplyScalar(1/8);};
+  h.setConnected(true);
+  for(let i=0;i<100;i++){
+    h.update(.016,{tiltX:Math.sin(i)*4,tiltY:Math.cos(i)*4});model.updateMatrixWorld(true);
+    assert.deepEqual(l.matrixWorld,lPose);assert.deepEqual(r.matrixWorld,rPose);
+    for(const [bud,name]of [[l,'Headphone_left_cable'],[r,'Headphone_right_cable']]){
+      const connector=bud.localToWorld(new THREE.Vector3(0,-1.7,0)),wireEnd=ringCenter(h.group.getObjectByName(name),true);
+      assert.ok(connector.distanceTo(wireEnd)<1e-6,'Cable must stay attached to its fixed stem');
+    }
+    const plug=h.group.getObjectByName('Straight_TRRS_plug'),start=ringCenter(h.group.getObjectByName('Headphone_main_cable'),false);
+    assert.ok(start.distanceTo(plug.localToWorld(new THREE.Vector3(0,1.20,0)))<1e-6);
+  }
+  h.dispose();
 });
 test('accessory framing fits the model and upper cable inside the usable content area at all sizes',()=>{
   for(const [width,height,left,right,top,bottom]of [[430,932,4,4,8,76],[320,480,4,4,8,66],[932,430,6,76,6,6],[440,690,0,0,0,65]]){

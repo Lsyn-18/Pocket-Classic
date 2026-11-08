@@ -2,6 +2,7 @@
 /work/
 /outputs/
 /.codex/
+/.codex-remote-attachments/
 **/runtime/
 .env
 .env.*
