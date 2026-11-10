@@ -1,4 +1,5 @@
 const {normalizeTracks}=require('./discovery.cjs');
+const {randomUUID}=require('node:crypto');
 const QUALITY_LEVELS=Object.freeze(['standard','exhigh','lossless','hires']);
 function validQuality(value){return QUALITY_LEVELS.includes(value);}
 function pageOffset(value=0){const n=Number(value);if(!/^(0|[1-9][0-9]{0,4})$/.test(String(value))||!Number.isSafeInteger(n))throw Object.assign(Error('无效分页'),{status:400});return n;}
@@ -6,8 +7,11 @@ function ownLiked(p,userId){const owner=Number(p?.userId??p?.creator?.userId);re
 function ordinaryPlaylists(list,userId){const seen=new Set();return list.filter(p=>Number.isSafeInteger(Number(p?.id))&&Number(p.id)>0&&!ownLiked(p,userId)&&!seen.has(Number(p.id))&&seen.add(Number(p.id))).map(p=>({id:Number(p.id),name:p.name,trackCount:p.trackCount,subscribed:!!p.subscribed}));}
 function createLibrary({call,getSession}){
   let likedCache=null,playlistCache=null;
-  function session(){const s=getSession();if(!s?.authenticated||!s.cookie)throw Object.assign(Error('请先连接网易云音乐'),{status:401});return s;}
-  function checked(r,s){if(getSession().cookie!==s.cookie||!getSession().authenticated)throw Error('账号已变化，请重新打开音乐菜单');if(r?.body?.code!==200)throw {body:r?.body};return r.body;}
+  const snapshots=new Map();let pinned='';
+  function retain(cached){cached.snapshot=randomUUID();snapshots.set(cached.snapshot,cached);for(const key of snapshots.keys()){if(snapshots.size<=12)break;if(key!==pinned)snapshots.delete(key);}return cached;}
+  function lookup(token,s){if(typeof token!=='string'||!/^[a-f0-9-]{36}$/.test(token))throw Object.assign(Error('无效歌单快照'),{status:400});const cached=snapshots.get(token);if(!cached||cached.cookie!==s.cookie)throw Error('歌单快照已失效，请重新进入歌单');return cached;}
+  function session(){const s=getSession();if(!s?.authenticated||!s.cookie)throw Object.assign(Error('请先连接网易云音乐'),{status:401,reason:'auth'});return s;}
+  function checked(r,s){if(getSession().cookie!==s.cookie||!getSession().authenticated)throw Object.assign(Error('账号已变化，请重新打开音乐菜单'),{reason:'auth'});if(r?.body?.code!==200)throw {body:r?.body};return r.body;}
   function paging(body,raw,offset,limit){const nextOffset=offset+raw.length;return {nextOffset,more:raw.length>0&&!!(body.hasMore??body.more??(Number.isFinite(body.count)?nextOffset<body.count:raw.length===limit))};}
   async function group(s,name,stopAt){
     const rows=[];
@@ -26,7 +30,7 @@ function createLibrary({call,getSession}){
     if(requireOrder&&!Array.isArray(list.trackIds))throw Error('喜欢的音乐顺序暂时无法读取，请稍后重试');
     const tracks=normalizeTracks(list.tracks||[]),raw=Array.isArray(list.trackIds)?list.trackIds.map(item=>typeof item==='object'?item?.id:item):tracks.map(t=>t.id);
     const ids=[...new Set(raw.filter(value=>Number.isSafeInteger(value)&&value>0))].slice(0,100000);
-    return {cookie:s.cookie,id,name:String(list.name||'歌单'),ids,metadata:new Map(tracks.map(t=>[t.id,t]))};
+    return retain({cookie:s.cookie,id,name:String(list.name||'歌单'),ids,metadata:new Map(tracks.map(t=>[t.id,t]))});
   }
   async function playlistPage(s,cached,offset,size=1000){
     const ids=cached.ids.slice(offset,offset+size),missing=ids.filter(value=>!cached.metadata.has(value));
@@ -35,11 +39,13 @@ function createLibrary({call,getSession}){
       for(const track of normalizeTracks(body.songs||[]))if(requested.has(track.id))cached.metadata.set(track.id,track);
     }
     const nextOffset=offset+ids.length;
-    return {id:cached.id,name:cached.name,tracks:ids.map(value=>cached.metadata.get(value)).filter(Boolean),trackCount:cached.ids.length,nextOffset,more:nextOffset<cached.ids.length};
+    return {id:cached.id,name:cached.name,snapshot:cached.snapshot,tracks:ids.map(value=>cached.metadata.get(value)).filter(Boolean),trackCount:cached.ids.length,nextOffset,more:nextOffset<cached.ids.length};
   }
   return {
+    pinSnapshot(token){const s=session();lookup(token,s);pinned=token;return {pinned:true};},
+    async queuePage(token,offset){const s=session(),cached=lookup(token,s);return playlistPage(s,cached,pageOffset(offset));},
     async playlists(){
-      const s=session();if(!Number.isSafeInteger(Number(s.userId))||Number(s.userId)<=0)throw Object.assign(Error('请重新连接网易云音乐'),{status:401});
+      const s=session();if(!Number.isSafeInteger(Number(s.userId))||Number(s.userId)<=0)throw Object.assign(Error('请重新连接网易云音乐'),{status:401,reason:'auth'});
       const [created,collected]=await Promise.all([group(s,'user_playlist_create'),group(s,'user_playlist_collect')]);
       return ordinaryPlaylists([...created,...collected],s.userId);
     },
@@ -50,7 +56,7 @@ function createLibrary({call,getSession}){
       return playlistPage(s,cached,offset);
     },
     async liked(offset=0){
-      offset=pageOffset(offset);const s=session();if(!Number.isSafeInteger(Number(s.userId))||Number(s.userId)<=0)throw Object.assign(Error('请重新连接网易云音乐'),{status:401});
+      offset=pageOffset(offset);const s=session();if(!Number.isSafeInteger(Number(s.userId))||Number(s.userId)<=0)throw Object.assign(Error('请重新连接网易云音乐'),{status:401,reason:'auth'});
       let cached=likedCache;
       if(offset===0||cached?.cookie!==s.cookie){
         const rows=await group(s,'user_playlist_create',p=>ownLiked(p,s.userId)),heart=rows.find(p=>ownLiked(p,s.userId));
@@ -62,8 +68,8 @@ function createLibrary({call,getSession}){
     async resolve(id,quality='standard'){
       id=Number(id);if(!Number.isSafeInteger(id)||id<=0||!validQuality(quality))throw Object.assign(Error('无效歌曲或音质'),{status:400});
       const s=session(),body=checked(await call('song_url_v1',{id,level:quality,unblock:'false'},s.cookie),s),a=body.data?.[0];
-      if(!a)throw Error('歌曲暂时没有可用音源');
-      return {id,code:a.code,url:a.url||null,durationMs:a.time,size:a.size,trial:a.freeTrialInfo||null,type:a.type,level:a.level||null,bitrate:a.br||null};
+      if(!a)throw Object.assign(Error('歌曲暂时没有可用音源'),{reason:'unavailable'});
+      return {id,code:a.code,errorReason:a.url?null:'unavailable',url:a.url||null,durationMs:a.time,size:a.size,trial:a.freeTrialInfo||null,type:a.type,level:a.level||null,bitrate:a.br||null};
     },
     async artists(offset=0){
       offset=pageOffset(offset);const s=session(),limit=50;

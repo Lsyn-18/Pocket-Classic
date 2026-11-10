@@ -26,7 +26,7 @@ async function call(name, params = {}, cookie = '') {
   return res;
 }
 function errorSummary(e) {
-  return { status: e.status || e.response?.status || null,
+  return { reason: e.reason || ([301,302,401].includes(Number(e.body?.code||e.status))?'auth':['ETIMEDOUT','ECONNRESET','ECONNREFUSED','ENOTFOUND','ERR_NETWORK','ECONNABORTED'].includes(e.code)?'network':'unknown'), status: e.status || e.response?.status || null,
     code: e.body?.code || e.code || null,
     message: String(e.body?.msg || e.body?.message || e.message || 'request failed').slice(0, 220) };
 }

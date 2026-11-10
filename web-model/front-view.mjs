@@ -6,7 +6,7 @@ import { createMotionControl } from './motion.mjs';
 import { createStudioFloor } from './studio-floor.mjs';
 import { createWheelInput } from './wheel-input.mjs';
 import {createButtonPress} from './button-press.mjs';
-import {visualBaseline,screenQuality} from './visual-profile.mjs';
+import {visualBaseline,screenQuality,createRenderBudget} from './visual-profile.mjs';
 import {createStudioEnvironment} from './environment.mjs';
 import {createAtmosphere} from './atmosphere.mjs';
 import {createStartupView} from './startup-view.mjs';
@@ -14,7 +14,12 @@ import {createStartupRenderer} from './startup-renderer.mjs';
 import {createLoadingPoster} from './loading-poster.mjs';
 import {createHeadphones} from './headphones.mjs';
 import {headphoneFrustum} from './headphone-motion.mjs';
+import {createFinishTransition} from './finish-transition.mjs';
+import {createCoverFlow} from './cover-flow.mjs';
+import {createShowcase} from './showcase.mjs';
 
+export function startFrontView({onFallback=()=>{}}={}){
+let stopped=false,lastReducedFrame='';
 const app=window.PocketClassicContext,host=document.getElementById('modelViewport'),status=document.getElementById('modelStatus');
 document.body.classList.toggle('visual-baseline',visualBaseline);
 const poster=createLoadingPoster({baseline:visualBaseline,preferences:app.native?.ready,state:app.state,markReady:app.native?version=>app.native.posterReady(version):undefined});
@@ -22,16 +27,20 @@ const feedbackControls=host.querySelector('.feedback-controls'),feedbackDismiss=
 for(const event of ['pointerdown','pointerup','pointermove'])feedbackDismiss.addEventListener(event,e=>e.stopPropagation());
 function placeFeedback(){feedbackControls.style.transform=screen.canvas.style.transform;const m=new DOMMatrix(screen.canvas.style.transform),w=Math.max(64,44/Math.hypot(m.a,m.b)),h=Math.max(44,44/Math.hypot(m.c,m.d));Object.assign(feedbackDismiss.style,{width:w+'px',height:h+'px',left:(276-w/2)+'px',top:(116-h/2)+'px'});}
 const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true,powerPreference:'high-performance',preserveDrawingBuffer:visualBaseline});
+
+renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();onFallback('三维界面暂不可用，已切换简洁界面，可以继续听歌。');});
 let shaderErrors=0;
 renderer.debug.onShaderError=(gl,program,vertex,fragment)=>{shaderErrors++;console.error('WebGL shader compilation failed',gl.getProgramInfoLog(program),gl.getShaderInfoLog(vertex),gl.getShaderInfoLog(fragment));};
 const quality=screenQuality(renderer.capabilities);
 const renderPixelRatio=!visualBaseline&&!app.native&&quality.pixelScale===4?2:Math.min(devicePixelRatio,2);
-renderer.setPixelRatio(renderPixelRatio);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.02;renderer.setClearColor(0,0);
+const renderBudget=createRenderBudget(renderPixelRatio);
+renderer.setPixelRatio(renderPixelRatio);host.dataset.renderRatio=String(renderPixelRatio);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.02;renderer.setClearColor(0,0);
 renderer.domElement.setAttribute('aria-label','iPod Classic 正面三维模型，轻移鼠标或开启体感改变反光');host.append(renderer.domElement);
 const scene=new THREE.Scene();
 const camera=new THREE.OrthographicCamera(-4,4,6,-6,.1,60);camera.position.set(0,0,20);camera.lookAt(0,0,0);
 
 const environment=createStudioEnvironment(renderer,{baseline:visualBaseline});
+
 scene.environment=environment.texture;scene.environmentIntensity=1;
 scene.add(new THREE.HemisphereLight(0xffffff,0xaaaaaa,.4));
 const key=new THREE.DirectionalLight(0xffffff,.8);key.position.set(-4,7,12);scene.add(key);
@@ -40,6 +49,9 @@ RectAreaLightUniformsLib.init();
 const studioCard=new THREE.RectAreaLight(0xffffff,visualBaseline?12:7.5,visualBaseline?1.8:1.4,visualBaseline?12:11);studioCard.position.set(...(visualBaseline?[-2.8,1.5,6]:[-2.2,2,5]));studioCard.lookAt(0,0,0);scene.add(studioCard);
 const rimLight=new THREE.RectAreaLight(0xffead1,visualBaseline?0:1.6,3,7);rimLight.position.set(5,2,6);rimLight.lookAt(0,0,0);if(!visualBaseline)scene.add(rimLight);
 const screen=makeScreen(app,{...quality,baseline:visualBaseline}),classic=createClassic(screen.texture,{baseline:visualBaseline});scene.add(classic.model);
+const finish=createFinishTransition(classic,{baseline:visualBaseline});
+const covers=createCoverFlow(classic.model,D,screen.artwork);
+
 // Composite the original high-resolution canvas at the display's native DPR.
 // The scene's 2x budget and texture mip chain no longer soften LCD text/colors.
 if(!visualBaseline){screen.canvas.className='lcd-surface';screen.canvas.setAttribute('aria-hidden','true');host.append(screen.canvas);}
@@ -76,6 +88,8 @@ const motion=createMotionControl({source:app.native?.motion,onChange:motionUI});
 document.getElementById('playerOptionsPanel').prepend(motionButton.parentElement);
 document.getElementById('openAppearance').onclick=()=>{closeOptions();app.openAppearance();};
 document.getElementById('openHelp').onclick=()=>{closeOptions();app.openHelp();};
+document.getElementById('openCovers').onclick=()=>{closeOptions();app.openCovers();};
+document.getElementById('openLocalManager').onclick=()=>{closeOptions();app.openLocalManager();};
 document.getElementById('headphonesPreview').onclick=()=>{closeOptions();headphones.preview();document.getElementById('uiAnnouncement').textContent='预览耳机接入动画，实际音频输出保持不变';};
 motionButton.onclick=()=>{if(motion.state.enabled||motion.state.pending)motion.stop();else motion.start()};
 calibrateButton.onclick=()=>motion.recalibrate();
@@ -84,20 +98,23 @@ window.addEventListener('pagehide',()=>motion.stop());
 const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 const pointer=new THREE.Vector2(),raycaster=new THREE.Raycaster();
 let fittedView;
+const showcase=createShowcase({app,host,camera,restore(){camera.position.set(0,0,20);camera.lookAt(0,0,0);if(fittedView)applyFrustum(fittedView.frustum);camera.updateMatrixWorld();}});
+document.getElementById('openShowcase').onclick=()=>{closeOptions();if(!poster.active&&!startup.active&&!app.state.busy)showcase.start();};
 function applyFrustum(bounds){Object.assign(camera,bounds);camera.updateProjectionMatrix();}
 function measure(){const root=document.documentElement;document.body.classList.toggle('landscape-player',root.clientWidth>root.clientHeight);const r=host.getBoundingClientRect();if(!r.width||!r.height)return;const style=getComputedStyle(host),left=parseFloat(style.paddingLeft)||0,right=parseFloat(style.paddingRight)||0,top=parseFloat(style.paddingTop)||0,bottom=parseFloat(style.paddingBottom)||0;const width=Math.max(1,r.width-left-right),height=Math.max(1,r.height-top-bottom),aspect=width/height,units=(compact()?Math.max(11.90,6.95/aspect):Math.max(11.75,6.65/aspect))/height,cx=(left+r.width-right)/2,cy=(top+r.height-bottom)/2;
   fittedView={width:r.width,height:r.height,contentHeight:height,centerX:cx,centerY:cy,frustum:{left:-cx*units,right:(r.width-cx)*units,top:cy*units-.28,bottom:-(r.height-cy)*units-.28}};
   applyFrustum(fittedView.frustum);renderer.setSize(r.width,r.height,false);host.dataset.fit=compact()?'screen':'studio'}
 new ResizeObserver(measure).observe(host);measure();
+
 function pick(e){const r=host.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);raycaster.setFromCamera(pointer,camera);
-  for(const hit of raycaster.intersectObject(classic.model,true)){const p=classic.model.worldToLocal(hit.point.clone()),zone=hit.object.userData.zone;if(zone==='wheel'&&Math.hypot(p.x,p.y-D.wheelY)>D.wheelOpening)continue;return {point:p,zone:zone||'case'}}return null}
+  for(const hit of raycaster.intersectObject(classic.model,true)){if(!hit.object.visible||hit.object.parent===covers.group&&!covers.group.visible||hit.object.parent?.parent===covers.group&&!covers.group.visible||hit.object.parent?.parent===covers.group&&!hit.object.parent.visible)continue;const p=classic.model.worldToLocal(hit.point.clone()),zone=hit.object.userData.zone;if(zone==='wheel'&&Math.hypot(p.x,p.y-D.wheelY)>D.wheelOpening)continue;return {point:p,zone:zone||'case',index:hit.object.userData.index}}return null}
 function wheelAction(p){const x=p.x,y=p.y-D.wheelY;if(Math.hypot(x,y)<D.centerRadius+.012)return 'select';return Math.abs(y)>Math.abs(x)?(y>0?'menu':'play'):(x<0?'previous':'next')}
 const press=createButtonPress({shortPress:name=>app.action(name),longPress:name=>app.action(name,true),stop:()=>app.stopSeeking()});
 const keyboardCancels=[];
 function release(){press.cancel();}
 const cancelGesture=()=>{gesture=null;release();for(const cancel of keyboardCancels)cancel();};
-host.addEventListener('pointerdown',e=>{if(e.button!==0||gesture)return;const hit=pick(e);if(!hit||hit.zone==='case')return;const p=hit.point;
-  gesture={id:e.pointerId,zone:hit.zone,point:p.clone(),angle:Math.atan2(p.y-D.wheelY,p.x),sum:0,dial:createWheelInput(),moved:false,held:false,x:e.clientX,y:e.clientY,action:hit.zone==='wheel'?wheelAction(p):null};
+host.addEventListener('pointerdown',e=>{if(showcase.active){showcase.stop();return;}if(e.button!==0||gesture)return;const hit=pick(e);if(!hit||hit.zone==='case')return;const p=hit.point;
+  gesture={id:e.pointerId,zone:hit.zone,index:hit.index,point:p.clone(),angle:Math.atan2(p.y-D.wheelY,p.x),sum:0,dial:createWheelInput(),moved:false,held:false,x:e.clientX,y:e.clientY,action:hit.zone==='wheel'?wheelAction(p):null};
   host.setPointerCapture(e.pointerId);
   if(hit.zone==='wheel')press.start(gesture.action);
 });
@@ -110,6 +127,7 @@ host.addEventListener('pointermove',e=>{
 host.addEventListener('pointerup',e=>{const g=gesture;if(!g||g.id!==e.pointerId)return;gesture=null;if(g.zone==='wheel'){press.release();return;}release();if(g.moved)return;
   if(g.zone==='hold'){app.state.hold=!app.state.hold;app.render();return}
   if(app.state.hold){app.feedback('按键已锁定 · 拨动顶部开关解锁','warning');return;}
+  if(g.zone==='cover'){if(g.index===app.state.selected)app.select();else{app.state.selected=g.index;app.render();}return;}
   if(g.zone==='screen'){const index=screen.hit((g.point.x+D.screenWidth/2)/D.screenWidth*320,(D.screenY+D.screenHeight/2-g.point.y)/D.screenHeight*240);if(typeof index==='string')app.screenAction(index);else if(index!==null){app.state.selected=index;app.select()}}
 });
 for(const name of ['pointercancel','lostpointercapture'])host.addEventListener(name,cancelGesture);
@@ -148,23 +166,28 @@ const startup=createStartupView({app,host,canvas:renderer.domElement,lcd:screen.
   classic.model.rotation.set(-.008,-.025,0);cancelGesture();
   // A skip can arrive between frames. Redraw both surfaces before unmasking
   // can paint a stale close-up or a floating, enlarged LCD for one frame.
-  classic.model.updateMatrixWorld(true);classic.setDark(app.state.dark);classic.setHold(app.state.hold);screen.draw();placeLCD();placeFeedback();
+  classic.model.updateMatrixWorld(true);finish.update(app.state.dark,performance.now(),{immediate:true});classic.setHold(app.state.hold);screen.draw();placeLCD();placeFeedback();
   atmosphere.update(0,{dark:document.body.classList.contains('dark'),reducedMotion:true});
-  floor.update(document.body.classList.contains('dark'),atmosphere.accent,1,app.state.dark);reflectedLCD?.material.color.setScalar(1);renderer.render(scene,camera);
+  floor.update(document.body.classList.contains('dark'),atmosphere.accent,1,finish.mix);reflectedLCD?.material.color.setScalar(1);renderer.render(scene,camera);
 }});
-window.PocketClassicVisual={diagnostics(){const gl=renderer.getContext();return {profile:host.dataset.visualProfile,opening:host.dataset.opening,headphones:host.dataset.headphones||'none',headphonePhase:host.dataset.headphonePhase||'waiting',drawCalls:renderer.info.render.calls,frameTriangles:renderer.info.render.triangles,textures:renderer.info.memory.textures,geometries:renderer.info.memory.geometries,shaderErrors,glError:gl.getError(),contextLost:gl.isContextLost(),lcdPixels:host.dataset.lcdPixels,particles:atmosphere.count};}};
-function frame(now){const dt=Math.min(.05,(now-previous)/1000);previous=now;const ease=1-Math.exp(-dt*7),reduce=reducedMotion.matches||app.state.reducedMotion;
+window.PocketClassicVisual={diagnostics(){const gl=renderer.getContext();return {profile:host.dataset.visualProfile,renderRatio:renderer.getPixelRatio(),opening:host.dataset.opening,headphones:host.dataset.headphones||'none',headphonePhase:host.dataset.headphonePhase||'waiting',drawCalls:renderer.info.render.calls,frameTriangles:renderer.info.render.triangles,textures:renderer.info.memory.textures,geometries:renderer.info.memory.geometries,shaderErrors,glError:gl.getError(),contextLost:gl.isContextLost(),lcdPixels:host.dataset.lcdPixels,particles:atmosphere.count};}};
+function frame(now){if(stopped)return;app.diagnostics.frame(now,{hidden:document.hidden,blocked:poster.active||startup.active||app.state.reader});const dt=Math.min(.05,(now-previous)/1000);previous=now;const ease=1-Math.exp(-dt*7),reduce=reducedMotion.matches||app.state.reducedMotion;
+
   if(reduce){targetX=-.008;targetY=-.025;if(motion.state.enabled)motion.stop();}
   const sensor=motion.tick(dt,now,!!gesture),usingSensor=motion.state.enabled;
   const x=usingSensor?-.008+sensor.x:targetX,y=usingSensor?-.025+sensor.y:targetY;
   // Freeze both input and the rendered pose while using the wheel or buttons.
   const opening=fittedView?startup.update(now,fittedView):null;
-  const headphonePose=headphones.update(dt,{blocked:!!opening||poster.active,paused:!!gesture,reducedMotion:reduce,tiltX:classic.model.rotation.x,tiltY:classic.model.rotation.y});
+  const headphonePose=headphones.update(dt,{blocked:!!opening||poster.active,paused:!!gesture||showcase.active,reducedMotion:reduce,tiltX:classic.model.rotation.x,tiltY:classic.model.rotation.y});
+  const showing=!opening&&fittedView?showcase.update(now,{...fittedView,frustum:headphoneFrustum(fittedView,headphonePose.framing)},{reducedMotion:reduce}):null;
   host.dataset.headphonePhase=opening?'waiting':headphonePose.visible?(headphonePose.progress===1?'seated':'moving'):'none';
-  if(!opening&&fittedView)applyFrustum(headphoneFrustum(fittedView,headphonePose.framing));
+  if(!opening&&!showing&&fittedView)applyFrustum(headphoneFrustum(fittedView,headphonePose.framing));
   if(opening){applyFrustum(opening.bounds);classic.model.rotation.set(-.008*opening.pose,-.025*opening.pose,0);}
-  else if(!gesture){const follow=usingSensor?1:ease;classic.model.rotation.x+=(x-classic.model.rotation.x)*follow;classic.model.rotation.y+=(y-classic.model.rotation.y)*follow}
-  classic.model.updateMatrixWorld(true);classic.setDark(app.state.dark);classic.setHold(app.state.hold);screen.draw();
+  else if(!gesture&&!showing){const follow=reduce||usingSensor?1:ease;classic.model.rotation.x+=(x-classic.model.rotation.x)*follow;classic.model.rotation.y+=(y-classic.model.rotation.y)*follow}
+  covers.update(app.state,dt,{reducedMotion:reduce,blocked:!!opening||poster.active});
+  screen.canvas.style.visibility=covers.group.visible?'hidden':'';
+  classic.model.updateMatrixWorld(true);finish.update(app.state.dark,now,{immediate:reduce||!!opening});classic.setHold(app.state.hold);screen.draw();
+
   const backlight=opening?.lcdLevel??1;classic.lcd.material.color.setScalar(backlight);
   placeLCD();placeFeedback();
   if(!visualBaseline){studioCard.position.x=-2.2+(classic.model.rotation.y+.025)*2;studioCard.position.y=2+(classic.model.rotation.x+.008)*1.5;studioCard.lookAt(0,0,0);}
@@ -172,16 +195,22 @@ function frame(now){const dt=Math.min(.05,(now-previous)/1000);previous=now;cons
   document.body.classList.toggle('is-playing',!app.audio.paused&&!app.state.sleep);
   atmosphere.update(dt,{dark:environmentDark,trackId:app.state.current?.id||0,playing:!app.audio.paused,tiltX:classic.model.rotation.x+.008,tiltY:classic.model.rotation.y+.025,reducedMotion:reduce||!!opening});
   if(!visualBaseline)studioCard.color.copy(atmosphere.light);
-  floor.update(environmentDark,atmosphere.accent,reduce||opening?1:1+Math.sin(now*.00045)*.035,app.state.dark);
+  floor.update(environmentDark,atmosphere.accent,reduce||opening?1:1+Math.sin(now*.00045)*.035,finish.mix);
   reflectedLCD?.material.color.setScalar(backlight);
   const r=host.getBoundingClientRect();for(const {button,point}of hitButtons){const p=classic.model.localToWorld(point.clone()).project(camera);button.style.transform=`translate(${(p.x*.5+.5)*r.width}px,${(-p.y*.5+.5)*r.height}px) translate(-50%,-50%)`}
   host.dataset.tilt=`${classic.model.rotation.x.toFixed(4)},${classic.model.rotation.y.toFixed(4)}`;
-  if(opening)startupRenderer.render(scene,camera,opening,fittedView);else renderer.render(scene,camera);
+  const nextRatio=renderBudget.sample(now,{blocked:document.hidden||poster.active||startup.active||app.state.reader||reduce});if(nextRatio){renderer.setPixelRatio(nextRatio);measure();host.dataset.renderRatio=String(nextRatio);lastReducedFrame='';}
+  const quietKey=reduce?JSON.stringify([screen.texture.version,finish.mix,headphonePose.progress,classic.model.rotation.x,classic.model.rotation.y,camera.left,camera.right,camera.top,camera.bottom,environmentDark,r.width,r.height]):'';
+  if(opening)startupRenderer.render(scene,camera,opening,fittedView);else if(!reduce||quietKey!==lastReducedFrame)renderer.render(scene,camera);lastReducedFrame=quietKey;
+
   // Finish the initial GPU upload while the opening clock is still waiting.
   if(renderedFrames===0&&startup.active)renderer.getContext().finish();
-  startup.warm();poster.warm();host.dataset.frames=String(++renderedFrames);if(renderedFrames%30===0){host.dataset.drawCalls=String(renderer.info.render.calls);host.dataset.frameTriangles=String(renderer.info.render.triangles);host.dataset.textures=String(renderer.info.memory.textures);}requestAnimationFrame(frame);
+
+  startup.warm();poster.warm();host.dataset.frames=String(++renderedFrames);if(renderedFrames%30===0){host.dataset.drawCalls=String(renderer.info.render.calls);host.dataset.frameTriangles=String(renderer.info.render.triangles);host.dataset.textures=String(renderer.info.memory.textures);}if(!stopped)requestAnimationFrame(frame);
 }
 // Compile even the initially hidden scene before the first visible wheel.
 // Android can otherwise defer linking until the canvas opacity becomes nonzero.
 startupRenderer.warm(scene,camera).catch(error=>console.warn('Scene warmup',error)).finally(()=>{document.body.classList.add('three-ready');requestAnimationFrame(frame);});
-window.addEventListener('pagehide',e=>{if(!e.persisted){unsubscribeHeadphones?.();unsubscribeHeadphoneVisibility?.();headphones.dispose();atmosphere.dispose();floor.dispose();screen.dispose();environment.dispose();renderer.dispose();}});
+window.addEventListener('pagehide',e=>{if(!e.persisted){showcase.dispose();unsubscribeHeadphones?.();unsubscribeHeadphoneVisibility?.();headphones.dispose();covers.dispose();atmosphere.dispose();floor.dispose();screen.dispose();environment.dispose();renderer.dispose();}});
+return {stop(){if(stopped)return;stopped=true;showcase.stop();motion.stop();startup.finish('fallback');poster.finish();},showcase};
+}

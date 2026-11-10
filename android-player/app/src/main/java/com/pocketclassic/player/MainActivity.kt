@@ -90,6 +90,7 @@ class MainActivity : ComponentActivity() {
         val localMusic = LocalMusicAccess(this, vm.localMusic)
         var error by mutableStateOf("")
         playerHost = NativePlayerHost(this, vm, ::notificationPermission, localMusic::perform) { error = it }
+        localMusic.onProgress=playerHost::localProgress
         onBackPressedDispatcher.addCallback(this) {
             if (vm.state.showConnection) vm.showConnection(false) else playerHost.back()
         }

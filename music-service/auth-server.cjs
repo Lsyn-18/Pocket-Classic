@@ -75,6 +75,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/results') return send(res, report);
     if (req.method === 'GET' && url.pathname === '/api/playlists') return send(res, { playlists: await playlists() });
     if (req.method === 'GET' && url.pathname === '/api/liked') return send(res,await library.liked(url.searchParams.get('offset')??'0'));
+    if (req.method === 'GET' && url.pathname === '/api/queue-page') return send(res,await library.queuePage(url.searchParams.get('snapshot'),url.searchParams.get('offset')??'0'));
     if (req.method === 'GET' && url.pathname === '/api/daily') return send(res, await discovery.daily());
     if (req.method === 'GET' && url.pathname === '/api/roam') return send(res, await discovery.roam());
     if (req.method === 'GET' && url.pathname === '/api/artists') return send(res,await library.artists(url.searchParams.get('offset')??'0'));
@@ -89,6 +90,7 @@ const server = http.createServer(async (req, res) => {
       let body = '';
       for await (const chunk of req) { body += chunk; if (body.length > 2048) throw new Error('Request too large'); }
       const data = body ? JSON.parse(body) : {};
+      if(url.pathname==='/api/queue-pin')return send(res,library.pinSnapshot(data.snapshot));
       if (url.pathname === '/api/qr') {
         if (snapshot.authenticated) return send(res, { authenticated: true });
         clearInterval(timer);
@@ -113,7 +115,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
     send(res, { error: 'Not found' }, 404);
-  } catch (e) { send(res, { error: errorSummary(e).message }, [400,401].includes(e.status) ? e.status : 502); }
+  } catch (e) { send(res, { error: errorSummary(e).message,errorReason:errorSummary(e).reason }, [400,401].includes(e.status) ? e.status : 502); }
 });
 prepareKey().then(() => {
   server.listen(PORT, '127.0.0.1', () => console.log(`Netease connection probe: ${origin}`));

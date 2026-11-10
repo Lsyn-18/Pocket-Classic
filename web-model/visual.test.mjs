@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {createClassic,dimensions} from './geometry.mjs';
 import {makeScreen} from './screen.mjs';
-import {screenQuality} from './visual-profile.mjs';
+import {screenQuality,createRenderBudget} from './visual-profile.mjs';
 import {createAtmosphere,trackAccent,trackLight} from './atmosphere.mjs';
 import {createStudioFloor} from './studio-floor.mjs';
 import {menuMarker,appearanceIsDark,canAdvance} from './presentation.mjs';
+import {lcdPalette} from './design-tokens.mjs';
+import {createFinishTransition} from './finish-transition.mjs';
+import {createCoverFlow,coverPose} from './cover-flow.mjs';
 
 function canvas(){
   const gradient={addColorStop(){}};
@@ -31,6 +34,19 @@ test('low-memory devices reduce only LCD backing quality',()=>{
   assert.equal(screenQuality({...capabilities,maxTextureSize:1024},{}).pixelScale,3);
 });
 
+test('white selected text meets AA throughout the menu gradient',()=>{
+  const luminance=color=>{const channels=new THREE.Color(color).toArray();return channels[0]*.2126+channels[1]*.7152+channels[2]*.0722;};
+  const top=new THREE.Color(lcdPalette.selectionTop),bottom=new THREE.Color(lcdPalette.selectionBottom),text=new THREE.Color(lcdPalette.onSelectionMuted);
+  for(let step=0;step<=20;step++){const background=top.clone().lerp(bottom,step/20);assert.ok((luminance(text)+.05)/(luminance(background)+.05)>=4.5);}
+});
+
+test('large home rows retain all four actions and menu transitions never delay hit testing',()=>{
+  const state={page:'home',title:'iPod',selected:0,largeText:true},app={state,audio:{paused:true,volume:.5},entries:()=>Array.from({length:4},(_,i)=>({name:'选项 '+i})),footerText:()=>''};
+  const screen=makeScreen(app);assert.equal(screen.hit(10,150),3);
+  Object.assign(state,{page:'tracks',title:'歌曲',selected:0,largeText:false,navigationDirection:1});screen.draw(true);assert.equal(screen.hit(240,36),0);assert.equal(screen.hit(240,75),1);
+  state.page='home';state.title='iPod';state.navigationDirection=-1;screen.draw(true);assert.equal(screen.hit(240,36),null);screen.dispose();
+});
+
 test('list hit targets exclude blank rows and remain aligned in large-text mode',()=>{
   const state={page:'tracks',selected:8,largeText:true};
   const app={state,audio:{paused:true,currentTime:0,volume:.5},entries:()=>Array.from({length:9},(_,id)=>({id,name:'歌曲 '+id})),footerText:()=>''};
@@ -40,15 +56,15 @@ test('list hit targets exclude blank rows and remain aligned in large-text mode'
 test('LCD errors and playback expose actions rather than stale list hit targets',()=>{
   const state={page:'tracks',selected:0,problem:{message:'网络暂时不可用'},feedback:'网络暂时不可用',feedbackLevel:'warning',feedbackAt:Date.now(),current:null};
   const app={state,audio:{paused:true,currentTime:0,volume:.5},entries:()=>[{name:'旧歌曲'}],footerText:()=>''};
-  const screen=makeScreen(app);assert.equal(screen.hit(30,114),'retry');assert.equal(screen.hit(175,114),'back');assert.equal(screen.hit(270,115),'dismiss');assert.equal(screen.hit(10,60),'dismiss');assert.equal(screen.hit(10,232),'retry');
+  const screen=makeScreen(app);assert.equal(screen.hit(30,188),'retry');assert.equal(screen.hit(210,188),'back');assert.equal(screen.hit(270,115),null);assert.equal(screen.hit(10,60),null);assert.equal(screen.hit(10,232),'retry');
   Object.assign(state,{page:'playing',problem:null,feedback:'',current:{id:1,name:'当前歌曲'},queue:[{id:1}],queueIndex:0});app.format=()=> '0:00';screen.draw(true);
-  assert.equal(screen.hit(260,207),'queue');assert.equal(screen.hit(130,160),'mode');assert.equal(screen.hit(120,70),'details');screen.dispose();
+  assert.equal(screen.hit(260,207),'queue');assert.equal(screen.hit(130,160),'seekMode');assert.equal(screen.hit(120,70),'details');screen.dispose();
 });
 
 test('enlarged cover remains a details target above the progress and volume controls',()=>{
   const state={page:'playing',mode:'volume',current:{id:1,name:'封面',artist:'音乐'},queue:[{id:1}],queueIndex:0};
   const app={state,audio:{paused:true,currentTime:20,duration:120,volume:.6},entries:()=>[],format:()=> '0:20',footerText:()=>''},screen=makeScreen(app);
-  for(const mode of ['volume','seek']){state.mode=mode;screen.draw(true);assert.equal(screen.hit(115,144),'details');assert.equal(screen.hit(80,162),'mode');assert.equal(screen.hit(150,207),'mode');assert.equal(screen.hit(260,207),'queue');}
+  for(const mode of ['volume','seek']){state.mode=mode;screen.draw(true);assert.equal(screen.hit(115,144),'details');assert.equal(screen.hit(80,162),'seekMode');assert.equal(screen.hit(150,207),'volumeMode');assert.equal(screen.hit(260,207),'queue');}
   screen.dispose();
 });
 
@@ -61,9 +77,9 @@ test('markers distinguish navigation, playing tracks, quality and boolean settin
 test('a failed final song offers return instead of an unavailable next action',()=>{
   const state={page:'playing',current:{id:1,name:'最后一首'},queue:[{id:1}],queueIndex:0,problem:{message:'暂不可播放'},feedback:'暂不可播放',feedbackLevel:'warning',feedbackAt:Date.now()};
   const app={state,audio:{paused:true,currentTime:0,volume:.5},entries:()=>[],format:()=> '0:00',footerText:()=>''};const screen=makeScreen(app);
-  assert.equal(canAdvance(state),false);assert.equal(screen.hit(180,115),'back');
-  state.repeat=2;screen.draw(true);assert.equal(canAdvance(state),true);assert.equal(screen.hit(180,115),'next');
-  state.feedback='';screen.draw(true);assert.equal(screen.hit(10,232),'retry');assert.equal(screen.hit(130,160),'mode');screen.dispose();
+  assert.equal(canAdvance(state),false);assert.equal(screen.hit(180,188),'back');
+  state.repeat=2;screen.draw(true);assert.equal(canAdvance(state),true);assert.equal(screen.hit(180,188),'next');
+  state.feedback='';screen.draw(true);assert.equal(screen.hit(10,232),'retry');assert.equal(screen.hit(180,188),'next');assert.equal(screen.hit(130,160),null);screen.dispose();
 });
 
 test('decorations stay outside picking and total model triangles stay within twenty percent',()=>{
@@ -125,6 +141,23 @@ test('finish changes reuse printing and metal textures without shader or texture
   assert.equal(disposals,0);
 });
 
+test('finish interpolation reverses from its current pose, synchronizes the reflection and respects reduced motion',()=>{
+  const classic=createClassic(new THREE.Texture(),{baseline:false}),finish=createFinishTransition(classic),front=classic.materials.front,map=front.map,version=front.version;
+  const floor=createStudioFloor(classic.model,-5.2),reflected=floor.group.getObjectByName('Flat_anodized_face_with_cutouts').material[0];
+  finish.update(false,0);const silver=front.color.clone();finish.update(true,10);finish.update(true,160);assert.ok(finish.mix>0&&finish.mix<1);assert.equal(front.color.equals(silver),false);
+  floor.update(false,null,1,finish.mix);assert.ok(reflected.color.equals(front.color));const midway=front.color.clone();finish.update(false,160);assert.ok(front.color.equals(midway),'A reversed transition must not jump');
+  finish.update(false,500);assert.equal(finish.mix,0);assert.ok(front.color.equals(silver));finish.update(true,510,{immediate:true});assert.equal(finish.mix,1);assert.equal(finish.active,false);assert.equal(front.map,map);assert.equal(front.version,version);floor.dispose();
+});
+
+test('3D cover browsing uses five reusable cards, latest selection and bounded texture resources',()=>{
+  const model=new THREE.Group(),flow=createCoverFlow(model,dimensions,{get:()=>null}),state={page:'covers',selected:0,coverCollection:{tracks:Array.from({length:100},(_,id)=>({id}))}};
+  flow.update(state,.016);assert.equal(flow.group.children.filter(card=>card.visible).length,3);const geometries=flow.group.children.map(card=>card.children[0].geometry);
+  state.selected=50;flow.update(state,.016);assert.equal(flow.group.children.filter(card=>card.visible).length,5);assert.ok(flow.group.children.some(card=>card.children[0].userData.index===50));
+  state.selected=99;flow.update(state,.016,{reducedMotion:true});const centre=flow.group.children.find(card=>card.children[0].userData.index===99);assert.equal(centre.position.x,0);assert.equal(centre.rotation.y,0);
+  assert.deepEqual(flow.group.children.map(card=>card.children[0].geometry),geometries);assert.equal(coverPose(-1).x,-coverPose(1).x);assert.ok(coverPose(0).z>coverPose(1).z);
+  state.page='playing';flow.update(state,.016);assert.equal(flow.group.visible,false);flow.dispose();assert.equal(model.children.length,0);
+});
+
 test('the wheel well covers the opening so the chrome rear cannot flash through its perimeter',()=>{
   const classic=createClassic(new THREE.Texture(),{baseline:false});classic.model.updateMatrixWorld(true);
   // Avoid triangle-fan seams where exact-axis CPU rays are numerically ambiguous.
@@ -153,4 +186,12 @@ test('floor updates retain soft reflection roughness and reuse textures across f
   const floor=createStudioFloor(model,-5),mirror=floor.group.children[0],material=mirror.children[0].material;
   for(const dark of [false,true,false]){floor.update(dark,trackAccent(1));assert.equal(material.roughness,.74);assert.equal(material.opacity,.13);}
   assert.equal(floor.group.children.length,6);floor.dispose();model.children[0].geometry.dispose();source.dispose();
+});
+
+test('raster quality ignores blocked gaps and single stalls but reduces sustained slow frames',()=>{
+ const budget=createRenderBudget(2);let now=0;for(let i=0;i<200;i++){now+=1000;assert.equal(budget.sample(now,{blocked:true}),null);}
+ for(let i=0;i<46;i++){now+=i===20?200:16;assert.equal(budget.sample(now),null);}
+ let changed=null;for(let i=0;i<45;i++){now+=80;changed=budget.sample(now)||changed;}assert.equal(changed,1.5);
+ changed=null;for(let i=0;i<45;i++){now+=80;changed=budget.sample(now)||changed;}assert.equal(changed,1);
+ for(let i=0;i<90;i++){now+=80;assert.equal(budget.sample(now),null);}
 });

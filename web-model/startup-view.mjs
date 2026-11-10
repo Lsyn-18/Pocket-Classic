@@ -6,7 +6,7 @@ export function createStartupView({app,host,canvas,lcd,dimensions,baseline,poste
   const outer=document.createElement('i'),inner=document.createElement('i');layer.append(outer,inner);host.append(layer);
   const skip=document.createElement('button');skip.type='button';skip.className='startup-skip';skip.textContent='跳过开场';body.append(skip);
   body.classList.add('startup-playing');host.dataset.opening='preparing';
-  const blocked=[...document.querySelectorAll('#playerTools,.model-hit-controls,.feedback-controls,header,.intro,.notes,footer')];
+  const blocked=[...document.querySelectorAll('#playerTools,.model-hit-controls,.feedback-controls,#accessibleMenu,header,.intro,.notes,footer')];
   const inert=blocked.map(element=>element.inert);blocked.forEach(element=>{element.inert=true;});
   const previousBack=app.native?.back;
   let cleaned=false;

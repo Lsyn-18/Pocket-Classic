@@ -31,6 +31,12 @@ test('offline queues send catalog IDs without accepting paths from the page',asy
   f.respond(message,{current:{id:-7,local:true},tracks:[{id:-7}],index:0,count:1,mode:'local'});await pending;
   const importing=f.platform.localAction('localImport','netease');assert.deepEqual(f.messages.at(-1).args,{category:'netease'});f.respond(f.messages.at(-1),{tracks:[]});await importing;
 });
+
+test('local progress is an observation and removal/undo carry only catalog IDs or tokens',async()=>{
+  const f=await fixture(),progress=[];f.platform.onLocalProgress(value=>progress.push(value));f.platform.receive({type:'localProgress',value:{processed:2,total:3}});assert.equal(progress[0].processed,2);assert.equal(f.messages.length,1);
+  const remove=f.platform.localManage('localRemove',{ids:[-1]});assert.deepEqual(f.messages.at(-1).args,{ids:[-1]});f.respond(f.messages.at(-1),{pendingRemovals:[{token:'fixture'}]});await remove;
+  const undo=f.platform.localManage('localUndo',{token:'fixture'});assert.equal(f.messages.at(-1).method,'localUndo');f.respond(f.messages.at(-1));await undo;
+});
 test('native audio state follows Media3 without generating browser ended events',async()=>{
   const f=await fixture();let ended=0;f.platform.audio.addEventListener('ended',()=>ended++);
   f.platform.receive({type:'playback',value:{playing:true,ready:true,positionMs:12345,durationMs:120000,volume:.4,count:3,index:1}});
@@ -46,6 +52,12 @@ test('a queue transition ignores old snapshots until the new native queue is ack
 });
 test('failed native queue changes release the transition fence',async()=>{
   const f=await fixture();const task=f.platform.playQueue([{id:2}],0,'roam',{});f.respond(f.messages.at(-1),{},'播放器未启动');await assert.rejects(task,/播放器未启动/);assert.equal(f.platform.transitioning,false);
+});
+
+test('selecting an existing native queue retains its session and does not rebuild media items',async()=>{
+  const f=await fixture({queueSession:'existing',count:205,index:0});const task=f.platform.selectQueue(120,'existing');const message=f.messages.at(-1);
+  assert.equal(message.method,'queueSelect');assert.deepEqual(message.args,{index:120,session:'existing'});assert.equal(f.platform.transitioning,true);
+  f.respond(message,{queueSession:'existing',count:205,index:120,current:{id:121},positionMs:0,playing:true});await task;assert.equal(f.platform.transitioning,false);assert.equal(f.messages.some(item=>item.method==='queue'),false);
 });
 test('seek, volume, pause and next become native commands',async()=>{
   const f=await fixture();f.platform.audio.currentTime=15;assert.deepEqual(f.messages.at(-1).args,{positionMs:15000});

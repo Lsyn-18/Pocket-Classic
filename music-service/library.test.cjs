@@ -4,6 +4,13 @@ const {createLibrary,validQuality,ordinaryPlaylists}=require('./library.cjs');
 const session={cookie:'test-session',authenticated:true};
 const song=id=>({id,name:'Song '+id,ar:[],dt:5000});
 
+test('a pinned playback snapshot survives browsing other playlists and rejects another account',async()=>{
+  let current={...session,userId:7};const library=createLibrary({getSession:()=>current,call:async(name,p)=>({body:{code:200,playlist:{id:p.id,name:'List '+p.id,trackIds:Array.from({length:1100},(_,i)=>({id:i+1})),tracks:Array.from({length:1100},(_,i)=>song(i+1))}}})});
+  const first=await library.tracks(1);library.pinSnapshot(first.snapshot);for(let id=2;id<18;id++)await library.tracks(id);
+  const continuation=await library.queuePage(first.snapshot,1000);assert.deepEqual(continuation.tracks.map(track=>track.id),Array.from({length:100},(_,i)=>1001+i));assert.equal(continuation.more,false);
+  current={...current,cookie:'different-account'};await assert.rejects(library.queuePage(first.snapshot,1000),/失效/);await assert.rejects(library.queuePage('../private',0),/无效/);
+});
+
 test('own liked playlist is independent of its name and other users liked playlists remain normal',()=>{
   const rows=[{id:1,name:'renamed',specialType:5,userId:7},{id:2,name:'喜欢的音乐',specialType:0,userId:7},{id:3,name:'other likes',specialType:5,creator:{userId:8}}];
   assert.deepEqual(ordinaryPlaylists(rows,7).map(p=>p.id),[2,3]);

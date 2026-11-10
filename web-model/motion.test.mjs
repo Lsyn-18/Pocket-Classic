@@ -1,10 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {QuietTilt, MOTION, createMotionControl} from './motion.mjs';
+import {sampleShowcase,showcaseDuration,createShowcase} from './showcase.mjs';
+import * as THREE from 'three';
 
 const degrees = pose => Math.hypot(pose.x, pose.y) * 180 / Math.PI;
 const product=(a,b)=>[a[3]*b[0]+a[0]*b[3]+a[1]*b[2]-a[2]*b[1],a[3]*b[1]-a[0]*b[2]+a[1]*b[3]+a[2]*b[0],a[3]*b[2]+a[0]*b[1]-a[1]*b[0]+a[2]*b[3],a[3]*b[3]-a[0]*b[0]-a[1]*b[1]-a[2]*b[2]];
 const axis=(x,y,z,degrees)=>{const a=degrees*Math.PI/360;return [x*Math.sin(a),y*Math.sin(a),z*Math.sin(a),Math.cos(a)]};
+
+test('showcase camera travels continuously through details and returns exactly to the front',()=>{
+  const start=sampleShowcase(0),end=sampleShowcase(showcaseDuration);assert.deepEqual(start.focus,[0,0,0]);assert.deepEqual(end.focus,[0,0,0]);assert.equal(end.zoom,1);assert.equal(end.yaw,0);assert.equal(end.done,true);
+  let previous=start;for(let i=1;i<=760;i++){const next=sampleShowcase(i*.01);assert.ok([...next.focus,next.zoom,next.yaw,next.pitch].every(Number.isFinite));assert.ok(next.zoom>=.5&&next.zoom<=1.05);assert.ok(Math.hypot(...next.focus.map((value,axis)=>value-previous.focus[axis]))<.12);previous=next;}
+});
+
+test('native back and reduced motion leave showcase with controls and camera restored',()=>{
+  const previousDocument=globalThis.document,previousMatch=globalThis.matchMedia,controls=[{inert:false}],events=new Map();let reduced=false,restores=0;
+  const back=()=>{};const app={state:{},feedback(){},native:{back,motion:{onVisibility(){return()=>{};}}}};
+  globalThis.matchMedia=()=>({matches:reduced});globalThis.document={hidden:false,body:{classList:{add(){},remove(){}},append(){}},querySelectorAll:()=>controls,createElement:()=>({remove(){},focus(){}}),getElementById:()=>({focus(){}}),addEventListener:(name,handler)=>events.set(name,handler),removeEventListener(){}};
+  try {const camera=new THREE.OrthographicCamera(-4,4,6,-6,.1,60),show=createShowcase({app,host:{dataset:{}},camera,restore:()=>restores++}),view={frustum:{left:-4,right:4,top:6,bottom:-6}};show.start();assert.equal(controls[0].inert,true);show.update(0,view);show.update(2000,view);app.native.back();assert.equal(show.active,false);assert.equal(app.native.back,back);assert.equal(controls[0].inert,false);assert.equal(restores,1);show.start();show.update(0,view,{reducedMotion:true});assert.equal(show.active,false);reduced=true;show.start();assert.equal(show.active,false);show.dispose();}finally{globalThis.document=previousDocument;globalThis.matchMedia=previousMatch;}
+});
 function quaternionCalibration(q){const tilt=new QuietTilt();for(let t=0;t<=600;t+=50)tilt.push(89,0,0,t,q);return tilt;}
 
 test('native orientation near upright uses continuous rotation even when equivalent Euler angles flip',()=>{

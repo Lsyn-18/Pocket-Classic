@@ -1,12 +1,12 @@
 export function createNativePlatform(transport, host = window) {
   let sequence=0,playbackListener,connectionListener,batteryListener,lastBattery,lastHeadphones,lastSnapshot,transitioning=false,preferencesReady=false,lastPreferences='';
-  const pending=new Map(),motionListeners=new Set(),visibilityListeners=new Set(),headphoneListeners=new Set();
+  const pending=new Map(),motionListeners=new Set(),visibilityListeners=new Set(),headphoneListeners=new Set(),localProgressListeners=new Set();
   function headphones(value){lastHeadphones={available:value?.available!==false,connected:!!value?.connected,kind:['wired','usb','bluetooth'].includes(value?.kind)?value.kind:'none'};for(const listener of headphoneListeners)listener(lastHeadphones);}
   function request(method,args={}) {
     const id=++sequence;
     return new Promise((resolve,reject)=>{
       const library=method==='api'&&(args.route==='playlists'||/^(tracks\?id=|liked\?offset=)/.test(args.route));
-      const timer=host.setTimeout(()=>{pending.delete(id);reject(Error('手机服务响应超时，请重试'));},['localScan','localImport','localFolder'].includes(method)?600000:library?120000:45000);
+      const timer=host.setTimeout(()=>{pending.delete(id);reject(Object.assign(Error('手机服务响应超时，请重试'),{reason:'network'}));},['localScan','localImport','localFolder'].includes(method)?600000:library?120000:45000);
       pending.set(id,{resolve,reject,timer});
       try{const message=JSON.stringify({id,method,args});if(message.length>1_900_000)throw Error('歌单过大，请选择较小的歌单');transport.postMessage(message);}catch(error){host.clearTimeout(timer);pending.delete(id);reject(error);}
     });
@@ -75,12 +75,16 @@ export function createNativePlatform(transport, host = window) {
     api:route=>request('api',{route}),openConnection:()=>request('connection'),
     posterReady:version=>request('posterReady',{version}),
     localAction:(method,category)=>request(method,{category}),
+    localManage:(method,args)=>request(method,args),
+    onLocalProgress(listener){localProgressListeners.add(listener);return()=>localProgressListeners.delete(listener);},
     async playQueue(tracks,index,mode,options){
       resetSeek();transitioning=true;
       const {volume:ignoredVolume,...playbackOptions}=options||{};
       try{const value=await request('queue',{tracks:mode==='local'?tracks.map(t=>({id:t.id})):tracks,index,mode,...playbackOptions});transitioning=false;snapshot(value);}
       catch(error){transitioning=false;throw error;}
     },
+    async selectQueue(index,session){resetSeek();transitioning=true;try{const value=await request('queueSelect',{index,session});transitioning=false;snapshot(value);}catch(error){transitioning=false;throw error;}},
+    retryQueue:()=>request('queueRetry'),
     next:()=>request('next'),previous:()=>request('previous'),configure:options=>fire('configure',options),
     vibrate:()=>fire('haptic'),
     artwork:async url=>(await request('artwork',{url})).dataUrl,
@@ -97,11 +101,12 @@ export function createNativePlatform(transport, host = window) {
     receive(packet){
       if(packet.type==='response'){
         const task=pending.get(packet.id);if(!task)return;pending.delete(packet.id);host.clearTimeout(task.timer);
-        if(packet.ok)task.resolve(packet.result);else task.reject(Error(packet.error||'手机操作暂时无法完成'));
+        if(packet.ok)task.resolve(packet.result);else task.reject(Object.assign(Error(packet.error||'手机操作暂时无法完成'),{reason:packet.errorReason}));
       }else if(packet.type==='playback')snapshot(packet.value);
       else if(packet.type==='connection')connectionListener?.();
       else if(packet.type==='battery'){lastBattery=packet.value;batteryListener?.(lastBattery);}
       else if(packet.type==='headphones')headphones(packet.value);
+      else if(packet.type==='localProgress')for(const listener of localProgressListeners)listener(packet.value);
       else if(packet.type==='orientation')for(const listener of motionListeners)listener(packet.value);
       else if(packet.type==='lifecycle')for(const listener of visibilityListeners)listener(!!packet.visible);
     },

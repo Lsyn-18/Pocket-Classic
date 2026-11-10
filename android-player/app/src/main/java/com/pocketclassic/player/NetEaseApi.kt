@@ -13,7 +13,8 @@ data class LoginPoll(val code: Int, val session: MusicSession? = null)
 class NetEaseApi(private val store: MusicSessionStore) {
     private data class Response(val body: JSONObject,val cookies: Map<String,String>)
     private val device=store.deviceId
-    private data class PlaylistCache(val session: String,val id: Long,val name: String,val index: PlaylistTrackIndex<JSONObject>)
+    private data class PlaylistCache(val session: String,val id: Long,val name: String,val index: PlaylistTrackIndex<JSONObject>,val token: String=java.util.UUID.randomUUID().toString())
+    private val snapshots=linkedMapOf<String,PlaylistCache>()
     private var likedCache: PlaylistCache? = null
     private var playlistCache: PlaylistCache? = null
     private fun request(path: String, data: JSONObject=JSONObject(), cookie: String="",mobile: Boolean=false): Response {
@@ -39,7 +40,7 @@ class NetEaseApi(private val store: MusicSessionStore) {
             connection.setRequestProperty("User-Agent",if(mobile)"NeteaseMusic/9.1.65 (Android 14)" else "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36")
             connection.setRequestProperty("Cookie",cookies.entries.joinToString("; ") { it.key+"="+it.value })
             connection.outputStream.use { it.write(encoded.toByteArray(Charsets.UTF_8)) }
-            if(connection.responseCode !in 200..299)throw IOException("网易云暂时无法连接（"+connection.responseCode+"），请检查手机网络")
+            if(connection.responseCode !in 200..299)throw MusicProblem(if(connection.responseCode==401)"auth" else "network","网易云暂时无法连接（"+connection.responseCode+"），请检查手机网络")
             val bytes=connection.inputStream.use { it.readBytes() }
             if(bytes.size>8_000_000)throw IOException("音乐列表过大，请选择较小的歌单")
             val body=runCatching { JSONObject(String(bytes,Charsets.UTF_8)) }.getOrElse { throw IOException("网易云返回了无法识别的内容，请稍后重试") }
@@ -52,10 +53,10 @@ class NetEaseApi(private val store: MusicSessionStore) {
     }
     private fun checked(response: Response): JSONObject {
         val code=response.body.optInt("code")
-        if(code!=200)throw IOException(if(code==301||code==302)"网易云登录已过期，请重新登录" else "网易云暂时无法完成此操作（"+code+"），请稍后重试")
+        if(code!=200)throw MusicProblem(if(code==301||code==302)"auth" else "unknown",if(code==301||code==302)"网易云登录已过期，请重新登录" else "网易云暂时无法完成此操作（"+code+"），请稍后重试")
         return response.body
     }
-    private fun current()=store.read()?:throw IOException("请先登录网易云音乐")
+    private fun current()=store.read()?:throw MusicProblem("auth","请先登录网易云音乐")
     private fun cookie(values: Map<String,String>)=values.entries.joinToString("; ") { it.key+"="+it.value }
     fun beginLogin(): LoginTicket {
         val response=request("/api/login/qrcode/unikey",JSONObject().put("type",3))
@@ -78,11 +79,11 @@ class NetEaseApi(private val store: MusicSessionStore) {
         val session=store.read()?:return JSONObject().put("authenticated",false).put("nickname","").put("message","在手机上登录网易云音乐即可使用")
         val body=checked(request("/api/w/nuser/account/get",cookie=session.cookie))
         val profile=body.optJSONObject("profile");val uid=profile?.optLong("userId")?:body.optJSONObject("account")?.optLong("id")?:0
-        if(uid<=0)throw IOException("网易云登录已过期，请重新登录")
+        if(uid<=0)throw MusicProblem("auth","网易云登录已过期，请重新登录")
         ensureSession(session)
         return JSONObject().put("authenticated",true).put("nickname",profile?.optString("nickname")?:session.nickname).put("message","网易云已登录，手机独立播放")
     }
-    private fun ensureSession(session: MusicSession) { if(store.read()?.id!=session.id)throw IOException("账号已变化，请重新打开音乐菜单") }
+    private fun ensureSession(session: MusicSession) { if(store.read()?.id!=session.id)throw MusicProblem("auth","账号已变化，请重新打开音乐菜单") }
     private fun ownLiked(item: JSONObject,session: MusicSession): Boolean {
         val owner=item.optLong("userId",item.optJSONObject("creator")?.optLong("userId")?:0L)
         return item.optLong("id")>0 && isOwnLikedPlaylist(item.optInt("specialType"),owner,session.userId)
@@ -110,7 +111,7 @@ class NetEaseApi(private val store: MusicSessionStore) {
         if(requireOrder && raw==null)throw IOException("喜欢的音乐顺序暂时无法读取，请稍后重试")
         val order=raw?.let { (0 until it.length()).map { index -> it.optJSONObject(index)?.optLong("id")?:it.optLong(index) } }
         val songs=normalize(list.optJSONArray("tracks")?:JSONArray())
-        return PlaylistCache(session.id,id,list.optString("name"),PlaylistTrackIndex(order,List(songs.length()) { songs.getJSONObject(it) }) { it.getLong("id") })
+        return PlaylistCache(session.id,id,list.optString("name"),PlaylistTrackIndex(order,List(songs.length()) { songs.getJSONObject(it) }) { it.getLong("id") }).also { cached -> synchronized(snapshots) { snapshots[cached.token]=cached;while(snapshots.size>12)snapshots.remove(snapshots.keys.first()) } }
     }
     private fun playlistPage(session: MusicSession,cached: PlaylistCache,offset: Int,size: Int=1000): JSONObject {
         val page=cached.index.page(offset,size) { ids ->
@@ -118,7 +119,17 @@ class NetEaseApi(private val store: MusicSessionStore) {
             val songs=normalize(checked(request("/api/v3/song/detail",data,session.cookie)).optJSONArray("songs")?:JSONArray())
             ensureSession(session);List(songs.length()) { songs.getJSONObject(it) }
         }
-        return JSONObject().put("id",cached.id).put("name",cached.name).put("trackCount",page.trackCount).put("tracks",JSONArray(page.tracks)).put("nextOffset",page.nextOffset).put("more",page.more)
+        return JSONObject().put("id",cached.id).put("name",cached.name).put("snapshot",cached.token).put("trackCount",page.trackCount).put("tracks",JSONArray(page.tracks)).put("nextOffset",page.nextOffset).put("more",page.more)
+    }
+    fun continuation(token: String): PagedQueueSource {
+        val session=current()
+        val cached=synchronized(snapshots) { snapshots[token] }?.takeIf { it.session==session.id } ?: throw IOException("歌单快照已失效，请重新进入歌单")
+        return PagedQueueSource(session.id,cached.name,0) { offset ->
+            ensureSession(session)
+            val page=playlistPage(session,cached,offset)
+            val tracks=page.getJSONArray("tracks")
+            PagedQueueBatch(List(tracks.length()) { trackFromJson(tracks.getJSONObject(it)) },page.getInt("nextOffset"),page.getBoolean("more"))
+        }
     }
     private fun normalize(list: JSONArray): JSONArray {
         val result=JSONArray();val seen=hashSetOf<Long>()
@@ -198,8 +209,8 @@ class NetEaseApi(private val store: MusicSessionStore) {
         require(id>0 && MusicQuality.valid(quality));val session=current()
         val body=checked(request("/api/song/enhance/player/url/v1",JSONObject().put("ids","[$id]").put("level",quality).put("encodeType","flac"),session.cookie))
         ensureSession(session)
-        val item=body.optJSONArray("data")?.optJSONObject(0)?:throw IOException("歌曲暂时没有可用音源")
-        val url=item.optString("url");if(!url.startsWith("https://")&&!url.startsWith("http://"))throw IOException("这首歌受账号或版权权限限制，请尝试下一首")
+        val item=body.optJSONArray("data")?.optJSONObject(0)?:throw MusicProblem("unavailable","歌曲暂时没有可用音源")
+        val url=item.optString("url");if(!url.startsWith("https://")&&!url.startsWith("http://"))throw MusicProblem("unavailable","这首歌受账号或版权权限限制，请尝试下一首")
         return PlayResource(url,!item.isNull("freeTrialInfo"),item.optLong("time"),item.optString("level"))
     }
 }

@@ -136,6 +136,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
     fun disconnect() {
         PlaybackService.clearQuality()
+        PagedQueues.clear()
         connectionGeneration++;loginGeneration++;loadGeneration++;loginJob?.cancel();loading?.cancel(); if (controller?.currentMediaItem?.mediaMetadata?.extras?.getString("mode") != "local") { controller?.stop(); controller?.clearMediaItems() }; store.clear()
         state = ClassicState(message = "已退出网易云音乐", theme = store.theme)
     }
@@ -156,6 +157,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (mode != "local") require(store.read() != null) { "请先登录网易云音乐" }
         val quality=data.optString("quality",store.quality);require(MusicQuality.valid(quality)) { "无效音质" };store.quality=quality
         val session = UUID.randomUUID().toString()
+        val source=data.optJSONObject("source")
+        val continuation=if(source?.optBoolean("more")==true && mode in setOf("playlist","liked")) {
+            val provider=api.continuation(source.getString("snapshot"))
+            val offset=source.getInt("offset");require(offset in 0..99999)
+            PagedQueueContext(session,provider.copy(title=source.optString("title",provider.title).take(1000),total=source.optInt("total").coerceIn(0,100000)),offset,true,data.optInt("repeat").coerceIn(0,2))
+        } else null
         val items = withContext(Dispatchers.IO) { List(tracks.length()) {
             val requested = tracks.getJSONObject(it)
             val track = if (mode == "local") localMusic.track(requested.getLong("id")) else trackFromJson(requested).copy(local = false, origin = "", format = "")
@@ -163,11 +170,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             mediaItem(track, mode, session)
         } }
         val c = player()
+        PagedQueues.install(continuation)
         c.shuffleModeEnabled = mode != "roam" && data.optBoolean("shuffle")
-        c.repeatMode = if (mode == "roam") Player.REPEAT_MODE_OFF else data.optInt("repeat").coerceIn(0,2)
+        c.repeatMode = if (mode == "roam" || continuation!=null && continuation.repeat==Player.REPEAT_MODE_ALL) Player.REPEAT_MODE_OFF else data.optInt("repeat").coerceIn(0,2)
         // The phone media stream owns loudness; no second per-player attenuation.
         c.volume = 1f
         c.setMediaItems(items, index, 0L); c.prepare(); c.play()
+    }
+    suspend fun manageLocal(method: String,args: JSONObject): JSONObject {
+        if(method=="localUndo")return withContext(Dispatchers.IO) { localMusic.undoRemoval(args.getString("token")) }
+        val raw=args.getJSONArray("ids");require(raw.length() in 1..5000)
+        val ids=(0 until raw.length()).map { raw.getLong(it) }.toSet();require(ids.all { it<0 })
+        val c=player();require(c.currentMediaItem?.mediaId?.toLongOrNull() !in ids) { "这首歌正在播放，请先切换歌曲后再移除" }
+        val result=withContext(Dispatchers.IO) { localMusic.stageRemoval(ids) }
+        if(c.currentMediaItem?.mediaId?.toLongOrNull() in ids){val token=result.getString("removalToken");withContext(Dispatchers.IO) { localMusic.undoRemoval(token) };throw IOException("歌曲刚刚开始播放，本次移除已撤销")}
+        for(index in c.mediaItemCount-1 downTo 0)if(c.getMediaItemAt(index).mediaId.toLongOrNull() in ids)c.removeMediaItem(index)
+        viewModelScope.launch { delay(10100);withContext(Dispatchers.IO) { localMusic.purgeExpired() } }
+        return result
     }
     suspend fun command(method: String, args: JSONObject) {
         val c = player()
@@ -176,14 +195,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             "pause" -> c.pause()
             "next" -> {
                 if (c.hasNextMediaItem()) c.seekToNextMediaItem()
-                else if (c.currentMediaItem?.mediaMetadata?.extras?.getString("mode") == "roam")
+                else if (c.currentMediaItem?.mediaMetadata?.extras?.getString("mode") == "roam" || PagedQueues.forSession(c.currentMediaItem?.mediaMetadata?.extras?.getString("queueSession"))?.cursor?.more==true)
                     c.sendCustomCommand(SessionCommand(NativeContract.NEXT, Bundle.EMPTY), Bundle.EMPTY)
             }
+            "queueSelect" -> { val index=args.getInt("index");require(index in 0 until c.mediaItemCount);require(args.getString("session")==c.currentMediaItem?.mediaMetadata?.extras?.getString("queueSession")) { "队列已变化，请重新打开队列" };c.seekTo(index,0);c.prepare();c.play() }
+            "queueRetry" -> c.sendCustomCommand(SessionCommand(NativeContract.NEXT,Bundle.EMPTY),Bundle().apply { putBoolean("retryOnly",true) })
             "previous" -> if (c.currentPosition > 3000 || !c.hasPreviousMediaItem()) c.seekTo(0) else c.seekToPreviousMediaItem()
             "seek" -> c.seekTo(args.optLong("positionMs").coerceIn(0, c.duration.takeIf { it > 0 && it != C.TIME_UNSET } ?: Long.MAX_VALUE))
             "configure" -> if (c.currentMediaItem?.mediaMetadata?.extras?.getString("mode") != "roam") {
                 c.shuffleModeEnabled = args.optBoolean("shuffle")
-                c.repeatMode = args.optInt("repeat").coerceIn(0,2)
+                val repeat=args.optInt("repeat").coerceIn(0,2)
+                val paged=PagedQueues.forSession(c.currentMediaItem?.mediaMetadata?.extras?.getString("queueSession"));paged?.repeat=repeat
+                c.repeatMode = if(paged?.cursor?.more==true && repeat==Player.REPEAT_MODE_ALL)Player.REPEAT_MODE_OFF else repeat
             }
         }
     }
@@ -204,17 +227,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val output = mediaVolume.read()
         val duration = c?.duration?.takeIf { it > 0 && it != C.TIME_UNSET } ?: 0
         val radioError = if (c?.sessionExtras?.getString("roamSession") == extra?.getString("queueSession")) c?.sessionExtras?.getString("roamError", "") else ""
+        val paged=PagedQueues.forSession(extra?.getString("queueSession"))
+        val playbackError=c?.playerError
+        val problem=PlaybackProblems.forError(extra?.getString("queueSession"),item?.mediaId,playbackError)
+            ?: playbackError?.let { PlaybackProblem(problemReason(it),problemMessage(it)) }
         val result = JSONObject().put("positionMs", c?.currentPosition?.coerceAtLeast(0) ?: 0).put("durationMs", duration)
             .put("playing", c?.playWhenReady ?: false).put("ready", c?.playbackState == Player.STATE_READY)
             .put("buffering", c?.playbackState == Player.STATE_BUFFERING).put("volume", output.level).put("volumeStep", output.step)
             .put("index", c?.currentMediaItemIndex?.coerceAtLeast(0) ?: 0).put("count", c?.mediaItemCount ?: 0)
             .put("mode", extra?.getString("mode") ?: "playlist").put("shuffle", c?.shuffleModeEnabled ?: false)
-            .put("repeat", c?.repeatMode ?: 0).put("dark", store.dark).put("haptics", store.haptics)
+            .put("repeat", paged?.repeat ?: c?.repeatMode ?: 0).put("dark", store.dark).put("haptics", store.haptics)
+            .put("queueSession",extra?.getString("queueSession")?:"").put("queueMore",paged?.cursor?.more?:false).put("queueLoading",paged?.cursor?.loading?:false).put("queueError",paged?.cursor?.error?:"").put("queueTitle",paged?.source?.title?:"").put("queueTotal",paged?.source?.total?:0)
             .put("quality",store.quality)
             .put("theme",store.theme).put("largeText",store.largeText).put("reducedMotion",store.reducedMotion)
             .put("actualQuality",if(c?.playbackState==Player.STATE_READY) { if (extra?.getString("mode") == "local") "offline" else PlaybackService.qualityFor(item?.mediaId?.toLongOrNull() ?: 0L) } else "")
             .put("current", item?.let(::trackJson) ?: JSONObject.NULL)
-            .put("error", c?.playerError?.cause?.message?.take(140) ?: c?.playerError?.message?.take(140) ?: radioError ?: "")
+            .put("error", problem?.message?:radioError?:"").put("errorReason",problem?.reason?:"unknown")
         if (includeQueue) result.put("tracks", JSONArray().apply { if (c != null) for (i in 0 until c.mediaItemCount) put(trackJson(c.getMediaItemAt(i))) })
         return result
     }
@@ -225,10 +253,10 @@ fun mediaItem(track: MusicTrack, mode: String, session: String): MediaItem = Med
     .setMediaId(track.id.toString()).setUri("pocketclassic://" + (if(track.local) "local/" else "track/") + track.id)
     .setMediaMetadata(MediaMetadata.Builder().setTitle(track.name).setArtist(track.artist)
         .setAlbumTitle(track.album).setArtworkUri(ArtworkPolicy.url(track.cover)?.let(Uri::parse))
-        .setExtras(Bundle().apply { putLong("duration", track.durationMs); putString("mode", mode); putString("queueSession", session); putBoolean("local", track.local); putString("origin", track.origin); putString("format", track.format) }).build()).build()
+        .setExtras(Bundle().apply { putLong("duration", track.durationMs); putString("mode", mode); putString("queueSession", session); putBoolean("local", track.local); putString("origin", track.origin); putString("format", track.format);putString("sourceKind",track.sourceKind);putLong("bytes",track.bytes) }).build()).build()
 
 fun trackJson(item: MediaItem): JSONObject = JSONObject().put("id", item.mediaId.toLongOrNull() ?: 0)
     .put("name", item.mediaMetadata.title?.toString() ?: "").put("artist", item.mediaMetadata.artist?.toString() ?: "")
     .put("durationMs", item.mediaMetadata.extras?.getLong("duration") ?: 0)
     .put("cover", item.mediaMetadata.artworkUri?.toString() ?: "").put("album", item.mediaMetadata.albumTitle?.toString() ?: "")
-    .put("local", item.mediaMetadata.extras?.getBoolean("local") ?: false).put("origin", item.mediaMetadata.extras?.getString("origin") ?: "").put("format", item.mediaMetadata.extras?.getString("format") ?: "")
+    .put("local", item.mediaMetadata.extras?.getBoolean("local") ?: false).put("origin", item.mediaMetadata.extras?.getString("origin") ?: "").put("format", item.mediaMetadata.extras?.getString("format") ?: "") .put("sourceKind", item.mediaMetadata.extras?.getString("sourceKind") ?: "").put("bytes",item.mediaMetadata.extras?.getLong("bytes")?:0L)

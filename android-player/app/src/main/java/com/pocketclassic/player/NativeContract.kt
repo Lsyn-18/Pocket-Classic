@@ -4,7 +4,7 @@ object NativeContract {
     const val ORIGIN = "https://appassets.androidplatform.net"
     const val PLAYER_PATH = "/assets/player.html"
     const val NEXT = "pocketclassic.next"
-    val methods = setOf("ready", "api", "connection", "queue", "play", "pause", "next", "previous", "seek", "volume", "configure", "preferences", "posterReady", "motionAvailable", "motion", "haptic", "artwork", "finish", "localScan", "localImport", "localFolder")
+    val methods = setOf("ready", "api", "connection", "queue", "queueSelect", "queueRetry", "play", "pause", "next", "previous", "seek", "volume", "configure", "preferences", "posterReady", "motionAvailable", "motion", "haptic", "artwork", "finish", "localScan", "localImport", "localFolder", "localRemove", "localUndo")
     fun validPosterVersion(value: String) = Regex("[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}").matches(value)
     fun allowedApi(route: String) = route in setOf("status", "playlists", "daily", "roam", "local") || Regex("liked\\?offset=(0|[1-9][0-9]{0,4})").matches(route) || Regex("tracks\\?id=[1-9][0-9]{0,15}(&offset=(0|[1-9][0-9]{0,4}))?").matches(route) || Regex("artists\\?offset=(0|[1-9][0-9]{0,4})").matches(route) || Regex("artist-tracks\\?id=[1-9][0-9]{0,15}&offset=(0|[1-9][0-9]{0,4})").matches(route)
     fun trustedAsset(scheme: String?, host: String?, path: String?) = scheme == "https" && host == "appassets.androidplatform.net" && path == PLAYER_PATH

@@ -58,7 +58,7 @@ class NativePlayerHost(
             settings.allowFileAccess = false; settings.allowContentAccess = false
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             settings.javaScriptCanOpenWindowsAutomatically = false
-            settings.setSupportMultipleWindows(false); settings.textZoom = 100
+            settings.setSupportMultipleWindows(false); settings.textZoom = (resources.configuration.fontScale*100).toInt().coerceAtLeast(100)
             settings.mediaPlaybackRequiresUserGesture = true
             settings.safeBrowsingEnabled = true
             addJavascriptInterface(object { @JavascriptInterface fun postMessage(raw: String) { handle(raw) } }, "PocketNative")
@@ -84,9 +84,10 @@ class NativePlayerHost(
             }
             webChromeClient = object : WebChromeClient() {
                 override fun onConsoleMessage(message: android.webkit.ConsoleMessage): Boolean {
-                    if (message.messageLevel() == android.webkit.ConsoleMessage.MessageLevel.ERROR &&
-                        (message.message().contains("WebGL") || message.message().contains("SyntaxError")))
-                        onError("三维界面未能加载，请更新 Android System WebView 后重新打开应用。")
+                    if(message.messageLevel()==android.webkit.ConsoleMessage.MessageLevel.ERROR) {
+                        if(message.message().contains("WebGL"))viewFallback()
+                        else if(message.message().contains("SyntaxError"))onError("界面未能加载，请更新 Android System WebView 后重新打开应用。")
+                    }
                     return true
                 }
             }
@@ -108,13 +109,15 @@ class NativePlayerHost(
                 val method = message.getString("method"); require(method in NativeContract.methods)
                 val args = message.optJSONObject("args") ?: JSONObject()
                 val result: Any = when (method) {
-                    "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true).put("battery", battery.read()).put("headphones",headphones.read()).put("opening", showOpening).put("posterVersion",vm.posterVersion) }
+                    "ready" -> { ready = true; revision = vm.queueRevision; vm.snapshot(true).put("battery", battery.read()).put("headphones",headphones.read()).put("fontScale",activity.resources.configuration.fontScale).put("opening", showOpening).put("posterVersion",vm.posterVersion) }
                     "api" -> vm.browserApi(args.getString("route"))
                     "connection" -> { vm.showConnection(); JSONObject() }
                     "localScan", "localImport", "localFolder" -> localAction(method, args.optString("category", "device"))
+                    "localRemove", "localUndo" -> vm.manageLocal(method,args)
                     "queue" -> { beforePlay(); vm.startQueue(args); revision = vm.queueRevision; vm.snapshot(true) }
+                    "queueSelect" -> { beforePlay();vm.command(method,args);vm.snapshot(true) }
                     "volume" -> vm.setMediaVolume(args.getDouble("value"))
-                    "play", "pause", "next", "previous", "seek", "configure" -> {
+                    "play", "pause", "next", "previous", "seek", "configure", "queueRetry" -> {
                         if (method == "play") beforePlay()
                         vm.command(method, args); JSONObject()
                     }
@@ -129,13 +132,14 @@ class NativePlayerHost(
                 }
                 emit(JSONObject().put("type", "response").put("id", id).put("ok", true).put("result", result))
             } catch (e: CancellationException) { throw e }
-            catch (e: Exception) { emit(JSONObject().put("type", "response").put("id", id).put("ok", false).put("error", e.message?.take(160) ?: "手机操作暂时无法完成")) }
+            catch (e: Exception) { emit(JSONObject().put("type", "response").put("id", id).put("ok", false).put("error", problemMessage(e)).put("errorReason",problemReason(e))) }
         }
     }
     private fun emit(packet: JSONObject) {
         if (destroyed) return
         webView.evaluateJavascript("window.PocketClassicNative&&window.PocketClassicNative.receive(" + packet.toString() + ");", null)
     }
+    private fun viewFallback() { webView.post { if(!destroyed)webView.evaluateJavascript("window.PocketClassicPresentation&&window.PocketClassicPresentation.fallback();",null) } }
     fun playback() {
         if (!ready || destroyed || !foreground) return
         val include = revision != vm.queueRevision
@@ -143,6 +147,7 @@ class NativePlayerHost(
         emit(JSONObject().put("type", "playback").put("value", data))
     }
     fun connectionChanged() { if (ready) emit(JSONObject().put("type", "connection")) }
+    fun localProgress(value: JSONObject) { webView.post { if(ready&&!destroyed)emit(JSONObject().put("type","localProgress").put("value",value)) } }
     fun back() { if (ready) webView.evaluateJavascript("window.PocketClassicNative&&window.PocketClassicNative.back();", null) else activity.finish() }
     fun resume() {
         if (destroyed) return

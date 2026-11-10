@@ -39,12 +39,16 @@ class PlaybackService : MediaSessionService() {
     private val radio = RadioContinuation()
     private var radioJob: Job? = null
     private var advanceFrom: String? = null
+    private var finiteJob: Job? = null
+    private var finiteSession = ""
+    private var finiteAdvanceFrom: String? = null
     private lateinit var store: MusicSessionStore
     private lateinit var api: NetEaseApi
 
     override fun onCreate() {
         super.onCreate()
         clearQuality()
+        PlaybackProblems.clear()
         store = MusicSessionStore(this); api = NetEaseApi(store)
         val localMusic = LocalMusicLibrary(this)
         val factory = musicDataSources(this, localMusic, { id ->
@@ -69,7 +73,10 @@ class PlaybackService : MediaSessionService() {
             override fun onCustomCommand(mediaSession: MediaSession, controller: MediaSession.ControllerInfo, command: SessionCommand, args: Bundle): ListenableFuture<SessionResult> {
                 if (command.customAction != NativeContract.NEXT || controller.packageName != packageName)
                     return Futures.immediateFuture(SessionResult(SessionError.ERROR_NOT_SUPPORTED))
-                if (player.hasNextMediaItem()) player.seekToNextMediaItem()
+                val paged=PagedQueues.forSession(player.currentMediaItem?.mediaMetadata?.extras?.getString("queueSession"))
+                if(args.getBoolean("retryOnly")) { if(paged!=null)refillFinite(player,true) }
+                else if (player.hasNextMediaItem()) player.seekToNextMediaItem()
+                else if(paged!=null) { finiteAdvanceFrom=player.currentMediaItem?.mediaId;refillFinite(player,true) }
                 else { advanceFrom = player.currentMediaItem?.mediaId; refill(player) }
                 return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
             }
@@ -79,11 +86,40 @@ class PlaybackService : MediaSessionService() {
         player.addListener(object : Player.Listener {
             override fun onEvents(p: Player, events: Player.Events) {
                 val key = p.currentMediaItem?.mediaMetadata?.extras?.getString("queueSession") ?: ""
+                PlaybackProblems.observe(key,p.currentMediaItem?.mediaId?:"",p.playerError)
                 if (radio.switchSession(key)) { radioJob?.cancel(); radioJob = null; advanceFrom = null; session?.setSessionExtras(Bundle.EMPTY) }
+                if(finiteSession!=key) { finiteSession=key;finiteJob?.cancel();finiteJob=null;finiteAdvanceFrom=null }
+                if(p.playWhenReady && (p.shuffleModeEnabled || p.mediaItemCount-p.currentMediaItemIndex<=5))refillFinite(player)
                 if (p.currentMediaItem?.mediaMetadata?.extras?.getString("mode") == "roam" && p.playWhenReady &&
                     p.mediaItemCount - p.currentMediaItemIndex <= 2) refill(player)
             }
         })
+    }
+    private fun refillFinite(player: ExoPlayer, force: Boolean=false) {
+        val key=player.currentMediaItem?.mediaMetadata?.extras?.getString("queueSession")?:return
+        val context=PagedQueues.forSession(key)?:return
+        if(player.mediaItemCount>=5000)return
+        val ticket=context.cursor.begin(force)?:return
+        finiteJob=scope.launch {
+            var succeeded=false
+            try {
+                if(store.read()?.id!=context.source.account)throw IOException("登录已变化，请重新连接并选择歌单")
+                val batch=withContext(Dispatchers.IO) { context.source.load(ticket.offset) }
+                if(PagedQueues.forSession(key)!==context || player.currentMediaItem?.mediaMetadata?.extras?.getString("queueSession")!=key || store.read()?.id!=context.source.account)return@launch
+                val seen=(0 until player.mediaItemCount).mapNotNull { player.getMediaItemAt(it).mediaId.toLongOrNull() }.toMutableSet()
+                val fresh=batch.tracks.filter { it.id>0 && seen.add(it.id) }.take(5000-player.mediaItemCount)
+                if(!context.cursor.accept(ticket,batch.nextOffset,batch.more,player.mediaItemCount+fresh.size))return@launch
+                val advance=player.playbackState==Player.STATE_ENDED || finiteAdvanceFrom==player.currentMediaItem?.mediaId
+                finiteAdvanceFrom=null
+                if(fresh.isNotEmpty())player.addMediaItems(fresh.map { mediaItem(it,player.currentMediaItem?.mediaMetadata?.extras?.getString("mode")?:"playlist",key) })
+                if(!context.cursor.more)player.repeatMode=context.repeat
+                if(advance && player.hasNextMediaItem()){player.seekToNextMediaItem();player.prepare();player.play()}
+                succeeded=true
+            } catch(e: CancellationException) { throw e }
+            catch(e: Exception) { if(PagedQueues.forSession(key)===context)context.cursor.fail(ticket,e.message?:"歌单续载失败，请重试") }
+            finally { context.cursor.finish(ticket) }
+            if(succeeded && PagedQueues.forSession(key)===context && context.cursor.more && player.playWhenReady && (player.shuffleModeEnabled || player.mediaItemCount-player.currentMediaItemIndex<=5))refillFinite(player)
+        }
     }
     private fun refill(player: ExoPlayer) {
         val extra = player.currentMediaItem?.mediaMetadata?.extras ?: return
@@ -118,5 +154,5 @@ class PlaybackService : MediaSessionService() {
         }
     }
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
-    override fun onDestroy() { scope.cancel(); session?.run { player.release(); release() }; session = null; super.onDestroy() }
+    override fun onDestroy() { scope.cancel();PagedQueues.clear();PlaybackProblems.clear(); session?.run { player.release(); release() }; session = null; super.onDestroy() }
 }
